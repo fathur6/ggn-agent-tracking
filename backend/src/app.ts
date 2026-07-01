@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser'
 import { config } from './config'
 import { AppError } from './utils/errors'
 import authRoutes from './routes/auth'
+import agentsRoutes from './routes/agents'
 
 const app = express()
 
@@ -17,6 +18,7 @@ app.use(express.json())
 app.use(cookieParser())
 
 app.use('/api/auth', authRoutes)
+app.use('/api/agents', agentsRoutes)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
