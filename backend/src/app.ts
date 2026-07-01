@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import { config } from './config'
 import { AppError } from './utils/errors'
+import authRoutes from './routes/auth'
 
 const app = express()
 
@@ -14,6 +15,8 @@ app.use(cors({
 }))
 app.use(express.json())
 app.use(cookieParser())
+
+app.use('/api/auth', authRoutes)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
