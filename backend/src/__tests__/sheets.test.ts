@@ -119,6 +119,58 @@ describe('SheetsService', () => {
         requestBody: { values: [['hello']] },
       })
     })
+
+    it('handles column 27 as AA', async () => {
+      mockSheetsApi.spreadsheets.values.update.mockResolvedValue({})
+
+      await service.updateCell('Sheet1', 2, 27, 'hello')
+
+      expect(mockSheetsApi.spreadsheets.values.update).toHaveBeenCalledWith({
+        spreadsheetId: expect.any(String),
+        range: 'Sheet1!AA2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['hello']] },
+      })
+    })
+
+    it('handles column 28 as AB', async () => {
+      mockSheetsApi.spreadsheets.values.update.mockResolvedValue({})
+
+      await service.updateCell('Sheet1', 2, 28, 'hello')
+
+      expect(mockSheetsApi.spreadsheets.values.update).toHaveBeenCalledWith({
+        spreadsheetId: expect.any(String),
+        range: 'Sheet1!AB2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['hello']] },
+      })
+    })
+
+    it('handles column 52 as AZ', async () => {
+      mockSheetsApi.spreadsheets.values.update.mockResolvedValue({})
+
+      await service.updateCell('Sheet1', 2, 52, 'hello')
+
+      expect(mockSheetsApi.spreadsheets.values.update).toHaveBeenCalledWith({
+        spreadsheetId: expect.any(String),
+        range: 'Sheet1!AZ2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['hello']] },
+      })
+    })
+
+    it('handles column 53 as BA', async () => {
+      mockSheetsApi.spreadsheets.values.update.mockResolvedValue({})
+
+      await service.updateCell('Sheet1', 2, 53, 'hello')
+
+      expect(mockSheetsApi.spreadsheets.values.update).toHaveBeenCalledWith({
+        spreadsheetId: expect.any(String),
+        range: 'Sheet1!BA2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['hello']] },
+      })
+    })
   })
 
   describe('getHeaders', () => {

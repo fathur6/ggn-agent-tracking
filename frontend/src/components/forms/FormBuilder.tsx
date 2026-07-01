@@ -8,8 +8,8 @@ interface FormBuilderProps {
 export function FormBuilder({ form }: FormBuilderProps) {
   const updateForm = useUpdateForm()
 
-  const enabledFields = form.EnabledFields
-    ? form.EnabledFields.split(',').filter(Boolean)
+  const enabledFields: string[] = form.EnabledFields
+    ? JSON.parse(form.EnabledFields)
     : []
 
   const availableFields = [

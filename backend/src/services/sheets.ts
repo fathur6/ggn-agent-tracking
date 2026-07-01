@@ -18,6 +18,16 @@ function sheetsClient(): sheets_v4.Sheets {
   return google.sheets({ version: 'v4', auth: getAuth() })
 }
 
+function columnToLetter(col: number): string {
+  let letter = ''
+  while (col > 0) {
+    col--
+    letter = String.fromCharCode(65 + (col % 26)) + letter
+    col = Math.floor(col / 26)
+  }
+  return letter
+}
+
 export class SheetsService {
   async getRows(sheetName: string): Promise<string[][]> {
     const res = await sheetsClient().spreadsheets.values.get({
@@ -50,7 +60,7 @@ export class SheetsService {
   }
 
   async updateCell(sheetName: string, row: number, col: number, value: string): Promise<void> {
-    const colLetter = String.fromCharCode(64 + col)
+    const colLetter = columnToLetter(col)
     await sheetsClient().spreadsheets.values.update({
       spreadsheetId: config.spreadsheetId,
       range: `${sheetName}!${colLetter}${row}`,
