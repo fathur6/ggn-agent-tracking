@@ -4,8 +4,6 @@ import { DriveService } from './drive'
 import { DocsService } from './docs'
 import { GmailService } from './gmail'
 import { generateApplicationId } from '../utils/appId'
-import { AppError } from '../utils/errors'
-
 interface OfferLetterInput {
   fullName: string
   email: string
@@ -61,7 +59,8 @@ export async function generateAndSendOffer(input: OfferLetterInput): Promise<Off
 
   await drive.deleteFile(docId)
 
-  const pdfUrl = `https://drive.google.com/file/d/${docId}/view`
+  const pdfFileId = await drive.uploadPdf(pdfFilename, pdfBuffer, config.offerOutputFolderId)
+  const pdfUrl = await drive.getFileUrl(pdfFileId)
 
   await sheets.ensureHeader('Leads', 'ProgrammeLevel')
   await sheets.ensureHeader('Leads', 'Status')

@@ -38,6 +38,21 @@ export class DriveService {
     return `https://drive.google.com/file/d/${fileId}/view`
   }
 
+  async uploadPdf(name: string, buffer: Buffer, folderId: string): Promise<string> {
+    const res = await driveClient().files.create({
+      requestBody: {
+        name,
+        parents: [folderId],
+        mimeType: 'application/pdf',
+      },
+      media: {
+        mimeType: 'application/pdf',
+        body: buffer,
+      },
+    })
+    return res.data.id!
+  }
+
   async getFileBuffer(fileId: string): Promise<Buffer> {
     const res = await driveClient().files.get(
       { fileId, alt: 'media' },

@@ -15,6 +15,7 @@ const mockDriveApi = {
     copy: vi.fn(),
     export: vi.fn(),
     delete: vi.fn(),
+    create: vi.fn(),
   },
 }
 
@@ -79,6 +80,7 @@ function setupDefaultMocks() {
   mockDriveApi.files.copy.mockResolvedValue({ data: { id: 'copied-doc-456' } })
   mockDriveApi.files.export.mockResolvedValue({ data: Buffer.from('fake-pdf') })
   mockDriveApi.files.delete.mockResolvedValue({})
+  mockDriveApi.files.create.mockResolvedValue({ data: { id: 'uploaded-pdf-999' } })
 
   mockDocsApi.documents.batchUpdate.mockResolvedValue({})
 
@@ -95,7 +97,7 @@ describe('generateAndSendOffer', () => {
     const result = await generateAndSendOffer(defaultInput)
 
     expect(result.applicationId).toBe(`${datePrefix}-002`)
-    expect(result.pdfUrl).toContain('copied-doc-456')
+    expect(result.pdfUrl).toContain('uploaded-pdf-999')
     expect(result.pdfUrl).toContain('drive.google.com')
   })
 
@@ -145,6 +147,22 @@ describe('generateAndSendOffer', () => {
     await generateAndSendOffer(defaultInput)
 
     expect(mockDriveApi.files.delete).toHaveBeenCalledWith({ fileId: 'copied-doc-456' })
+  })
+
+  it('uploades the PDF buffer to Drive and uses the new file id for the URL', async () => {
+    await generateAndSendOffer(defaultInput)
+
+    expect(mockDriveApi.files.create).toHaveBeenCalledWith({
+      requestBody: {
+        name: 'UNISZA Conditional Offer - Abu Bakar.pdf',
+        parents: [expect.any(String)],
+        mimeType: 'application/pdf',
+      },
+      media: {
+        mimeType: 'application/pdf',
+        body: Buffer.from('fake-pdf'),
+      },
+    })
   })
 
   it('sends an email with the PDF attached', async () => {

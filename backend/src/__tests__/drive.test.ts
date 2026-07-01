@@ -6,6 +6,7 @@ const mockDriveApi = {
     export: vi.fn(),
     delete: vi.fn(),
     get: vi.fn(),
+    create: vi.fn(),
   },
 }
 
@@ -78,6 +79,30 @@ describe('DriveService', () => {
       const url = await service.getFileUrl('file-123')
 
       expect(url).toBe('https://drive.google.com/file/d/file-123/view')
+    })
+  })
+
+  describe('uploadPdf', () => {
+    it('uploads a PDF to a folder and returns the file id', async () => {
+      mockDriveApi.files.create.mockResolvedValue({
+        data: { id: 'uploaded-pdf-789' },
+      })
+
+      const buf = Buffer.from('pdf-content')
+      const fileId = await service.uploadPdf('test.pdf', buf, 'folder-1')
+
+      expect(fileId).toBe('uploaded-pdf-789')
+      expect(mockDriveApi.files.create).toHaveBeenCalledWith({
+        requestBody: {
+          name: 'test.pdf',
+          parents: ['folder-1'],
+          mimeType: 'application/pdf',
+        },
+        media: {
+          mimeType: 'application/pdf',
+          body: buf,
+        },
+      })
     })
   })
 
