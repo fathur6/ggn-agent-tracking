@@ -6,6 +6,8 @@ import { config } from './config'
 import { AppError } from './utils/errors'
 import authRoutes from './routes/auth'
 import agentsRoutes from './routes/agents'
+import leadsRoutes from './routes/leads'
+import formsRoutes from './routes/forms'
 
 const app = express()
 
@@ -19,6 +21,8 @@ app.use(cookieParser())
 
 app.use('/api/auth', authRoutes)
 app.use('/api/agents', agentsRoutes)
+app.use('/api/leads', leadsRoutes)
+app.use('/api/forms', formsRoutes)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
