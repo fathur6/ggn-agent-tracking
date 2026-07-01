@@ -411,4 +411,28 @@ describe('PATCH /api/leads/:appId', () => {
     expect(res.status).toBe(200)
     expect(mockSheetsUpdate).toHaveBeenCalledWith('Leads', 3, 14, 'Document Review')
   })
+
+  it('returns 400 when status is not a string', async () => {
+    mockSheetsGet.mockResolvedValue(leadsSheet())
+    const token = agentToken('AG001')
+
+    const res = await request(app)
+      .patch('/api/leads/20260701-001')
+      .set('Cookie', `session=${token}`)
+      .send({ status: 123 })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when notes is not a string', async () => {
+    mockSheetsGet.mockResolvedValue(leadsSheet())
+    const token = agentToken('AG001')
+
+    const res = await request(app)
+      .patch('/api/leads/20260701-001')
+      .set('Cookie', `session=${token}`)
+      .send({ notes: true })
+
+    expect(res.status).toBe(400)
+  })
 })

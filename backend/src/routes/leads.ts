@@ -19,6 +19,11 @@ const leadSubmitSchema = z.object({
   formId: z.string().min(1),
 })
 
+const patchLeadSchema = z.object({
+  status: z.string().optional(),
+  notes: z.string().optional(),
+})
+
 const publicRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
@@ -60,8 +65,6 @@ router.get('/', authMiddleware, async (req, res, next) => {
     const rows = await sheets.getRows('Leads')
     const headers = rows[0]
     const agentIdCol = headers.indexOf('AgentID')
-    const appIdCol = headers.indexOf('ApplicationID')
-
     let leads = rows.slice(1).map(row => {
       const obj: Record<string, string> = {}
       headers.forEach((h, i) => { obj[h] = row[i] || '' })
@@ -89,15 +92,20 @@ router.get('/:appId', authMiddleware, async (req, res, next) => {
     const appIdCol = headers.indexOf('ApplicationID')
     const agentIdCol = headers.indexOf('AgentID')
 
-    const row = rows.slice(1).find(r => r[appIdCol] === req.params.appId)
-    if (!row) throw new AppError(404, 'Lead not found')
-
-    if (req.user?.role === 'agent' && row[agentIdCol] !== req.user?.agentId) {
-      throw new AppError(403, 'Access denied')
+    let rowIndex = -1
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][appIdCol] === req.params.appId) {
+        if (req.user?.role === 'agent' && rows[i][agentIdCol] !== req.user?.agentId) {
+          throw new AppError(403, 'Access denied')
+        }
+        rowIndex = i
+        break
+      }
     }
+    if (rowIndex === -1) throw new AppError(404, 'Lead not found')
 
     const lead: Record<string, string> = {}
-    headers.forEach((h, i) => { lead[h] = row[i] || '' })
+    headers.forEach((h, i) => { lead[h] = rows[rowIndex][i] || '' })
     res.json({ lead })
   } catch (err) {
     next(err)
@@ -106,7 +114,6 @@ router.get('/:appId', authMiddleware, async (req, res, next) => {
 
 router.patch('/:appId', authMiddleware, async (req, res, next) => {
   try {
-    const { status, notes } = req.body
     const rows = await sheets.getRows('Leads')
     const headers = rows[0]
     const appIdCol = headers.indexOf('ApplicationID')
@@ -117,21 +124,25 @@ router.patch('/:appId', authMiddleware, async (req, res, next) => {
     let rowIndex = -1
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][appIdCol] === req.params.appId) {
+        if (req.user?.role === 'agent' && rows[i][agentIdCol] !== req.user?.agentId) {
+          throw new AppError(403, 'Access denied')
+        }
         rowIndex = i
         break
       }
     }
     if (rowIndex === -1) throw new AppError(404, 'Lead not found')
 
-    if (req.user?.role === 'agent' && rows[rowIndex][agentIdCol] !== req.user?.agentId) {
-      throw new AppError(403, 'Access denied')
-    }
+    const patchData = patchLeadSchema.parse(req.body)
 
-    if (status) await sheets.updateCell('Leads', rowIndex + 1, statusCol + 1, status)
-    if (notes !== undefined) await sheets.updateCell('Leads', rowIndex + 1, notesCol + 1, String(notes))
+    if (patchData.status) await sheets.updateCell('Leads', rowIndex + 1, statusCol + 1, patchData.status)
+    if (patchData.notes !== undefined) await sheets.updateCell('Leads', rowIndex + 1, notesCol + 1, patchData.notes)
 
     res.json({ success: true })
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: err.issues })
+    }
     next(err)
   }
 })
