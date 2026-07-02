@@ -1,12 +1,12 @@
 function getDashboardSummary_(agentIdFilter) {
   var user = getCurrentUser_();
 
-  var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
+  var leads = getSheetObjects_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
 
   if (user.role === 'agent') {
-    leads = leads.filter(function (l) { return l.AgentID === user.agentId; });
+    leads = leads.filter(function (l) { return l.Agent === user.name; });
   } else if (user.role === 'admin' && agentIdFilter) {
-    leads = leads.filter(function (l) { return l.AgentID === agentIdFilter; });
+    leads = leads.filter(function (l) { return l.Agent === agentIdFilter; });
   }
 
   var totalLeads = leads.length;
@@ -17,7 +17,7 @@ function getDashboardSummary_(agentIdFilter) {
 
   var byAgent = {};
   leads.forEach(function (l) {
-    var key = l.AgentName || l.AgentID || 'Unknown';
+    var key = l.Agent || 'Unknown';
     if (!byAgent[key]) {
       byAgent[key] = { agentName: key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
     }
@@ -39,8 +39,8 @@ function getDashboardSummary_(agentIdFilter) {
     .slice(0, 5)
     .map(function (l) {
       return {
-        applicationId: l.ApplicationID,
-        fullName: l.FullName,
+        applicationId: l.Reference,
+        fullName: l.Name,
         status: l.Status,
         timestamp: l.Timestamp,
       };

@@ -124,12 +124,12 @@ function deleteAgent(agentId) {
 function getLeads(agentIdFilter) {
   try {
     var user = getCurrentUser_();
-    var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var leads = getSheetObjects_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
 
     if (user.role === 'agent') {
-      leads = leads.filter(function (l) { return l.AgentID === user.agentId; });
+      leads = leads.filter(function (l) { return l.Agent === user.name; });
     } else if (user.role === 'admin' && agentIdFilter) {
-      leads = leads.filter(function (l) { return l.AgentID === agentIdFilter; });
+      leads = leads.filter(function (l) { return l.Agent === agentIdFilter; });
     }
 
     leads.sort(function (a, b) { return (b.Timestamp || '').localeCompare(a.Timestamp || ''); });
@@ -142,12 +142,12 @@ function getLeads(agentIdFilter) {
 function getLead(appId) {
   try {
     var user = getCurrentUser_();
-    var found = findRowByColumn_(CONFIG.LEADS_SHEET_ID, 'Leads', 'ApplicationID', appId);
+    var found = findRowByColumn_(CONFIG.PROSPECT_SHEET_ID, 'Prospects', 'Reference', appId);
     if (!found) throw new Error('Lead not found');
     
-    var headers = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads')[0];
-    var agentIdCol = headers.indexOf('AgentID');
-    if (user.role === 'agent' && agentIdCol !== -1 && found.rowData[agentIdCol] !== user.agentId) {
+    var headers = getSheetData_(CONFIG.PROSPECT_SHEET_ID, 'Prospects')[0];
+    var agentCol = headers.indexOf('Agent');
+    if (user.role === 'agent' && agentCol !== -1 && found.rowData[agentCol] !== user.name) {
       throw new Error('Access denied');
     }
     
@@ -163,19 +163,18 @@ function updateLead(appId, updates) {
   try {
     var user = getCurrentUser_();
 
-    var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var data = getSheetData_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
     var headers = data[0];
-    var appIdCol = headers.indexOf('ApplicationID');
-    var agentIdCol = headers.indexOf('AgentID');
-    var statusCol = headers.indexOf('Status');
-    var notesCol = headers.indexOf('Notes');
+    var refCol = headers.indexOf('Reference');
+    var agentCol = headers.indexOf('Agent');
+    var remarksCol = headers.indexOf('Remarks');
 
-    if (appIdCol === -1) throw new Error('ApplicationID column not found');
+    if (refCol === -1) throw new Error('Reference column not found');
 
     var rowIndex = -1;
     for (var i = 1; i < data.length; i++) {
-      if (data[i][appIdCol] === appId) {
-        if (user.role === 'agent' && agentIdCol !== -1 && data[i][agentIdCol] !== user.agentId) {
+      if (data[i][refCol] === appId) {
+        if (user.role === 'agent' && agentCol !== -1 && data[i][agentCol] !== user.name) {
           throw new Error('Access denied');
         }
         rowIndex = i;
@@ -184,8 +183,7 @@ function updateLead(appId, updates) {
     }
     if (rowIndex === -1) throw new Error('Lead not found');
 
-    if (updates.status && statusCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, statusCol, updates.status);
-    if (updates.notes !== undefined && notesCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, notesCol, String(updates.notes));
+    if (updates.remarks !== undefined && remarksCol !== -1) updateCell_(CONFIG.PROSPECT_SHEET_ID, 'Prospects', rowIndex, remarksCol, String(updates.remarks));
 
     return { success: true };
   } catch (e) {
@@ -200,17 +198,33 @@ function submitLead(leadData) {
     }
 
     var agentName = 'Unknown';
+    var agentEmail = '';
     if (leadData.agentId) {
       var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
       var headers = data[0];
       var agentIdCol = headers.indexOf('AgentID');
       var agentNameCol = headers.indexOf('Name');
+      var agentEmailCol = headers.indexOf('Email');
       if (agentIdCol !== -1 && agentNameCol !== -1) {
         for (var i = 1; i < data.length; i++) {
           if (data[i][agentIdCol] === leadData.agentId) {
             agentName = data[i][agentNameCol] || 'Unknown';
+            if (agentEmailCol !== -1) agentEmail = data[i][agentEmailCol] || '';
             break;
           }
+        }
+      }
+    }
+
+    var location = '';
+    var remarks = '';
+    if (leadData.formId) {
+      var forms = getSheetObjects_(CONFIG.FORMS_SHEET_ID, 'Forms');
+      for (var j = 0; j < forms.length; j++) {
+        if (forms[j].FormID === leadData.formId) {
+          location = forms[j].LocationEvent || '';
+          remarks = forms[j].Remark || '';
+          break;
         }
       }
     }
@@ -223,7 +237,10 @@ function submitLead(leadData) {
       programme: leadData.programme || '',
       agentId: leadData.agentId || '',
       agentName: agentName,
+      agentEmail: agentEmail,
       formId: leadData.formId || '',
+      location: location,
+      remarks: remarks,
     });
 
     return { success: true, applicationId: result.applicationId, pdfUrl: result.pdfUrl };

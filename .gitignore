@@ -4,3 +4,4 @@ dist/
 .env
 *.log
 apps-script/Config.gs
+.playwright-mcp/

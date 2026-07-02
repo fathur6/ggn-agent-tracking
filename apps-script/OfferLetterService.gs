@@ -1,5 +1,5 @@
 function generateAndSendOffer_(input) {
-  var appId = generateApplicationId_(CONFIG.LEADS_SHEET_ID, 'Leads');
+  var appId = generateApplicationId_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
   var now = new Date();
   var formattedDate = formatDateLong_(now);
 
@@ -34,30 +34,30 @@ function generateAndSendOffer_(input) {
 
   copiedDoc.setTrashed(true);
 
-  var sheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 16).getValues()[0];
-  if (headers.indexOf('ProgrammeLevel') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('ProgrammeLevel');
-  if (headers.indexOf('Status') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Status');
-  if (headers.indexOf('OfferPDF') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('OfferPDF');
-  if (headers.indexOf('ApplicationID') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('ApplicationID');
+  var sheet = getSheetByName_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 10).getValues()[0];
+  if (headers.indexOf('Timestamp') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Timestamp');
+  if (headers.indexOf('Agent') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Agent');
+  if (headers.indexOf('Location') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Location');
+  if (headers.indexOf('Remarks') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Remarks');
+  if (headers.indexOf('Reference') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Reference');
+  if (headers.indexOf('Name') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Name');
+  if (headers.indexOf('Passport') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Passport');
+  if (headers.indexOf('Email') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Email');
+  if (headers.indexOf('Programme') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Programme');
+  if (headers.indexOf('Structure') === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue('Structure');
 
   var rowValues = [
-    appId,
     now.toISOString(),
-    input.fullName || '',
-    input.email || '',
-    input.passport || '',
-    '',
-    input.structure || '',
-    input.programme || '',
-    programmeLevel,
-    '',
-    input.agentId || '',
     input.agentName || 'Unknown',
-    input.formId || '',
-    'Offer Sent',
-    pdfUrl,
-    '',
+    input.location || '',
+    input.remarks || '',
+    appId,
+    input.fullName || '',
+    input.passport || '',
+    input.email || '',
+    input.programme || '',
+    input.structure || '',
   ];
 
   sheet.appendRow(rowValues);
@@ -79,9 +79,15 @@ function generateAndSendOffer_(input) {
     'Universiti Sultan Zainal Abidin',
   ].join('\n');
 
+  var ccEmails = [];
+  if (input.agentEmail) ccEmails.push(input.agentEmail);
+  ccEmails.push(CONFIG.EMAIL_CC);
+
   GmailApp.sendEmail(input.email, 'Conditional Offer - Universiti Sultan Zainal Abidin', emailBody, {
     attachments: [pdfBlob],
     name: 'UniSZA Graduate School',
+    cc: ccEmails.join(','),
+    replyTo: CONFIG.EMAIL_REPLY_TO,
   });
 
   return {
