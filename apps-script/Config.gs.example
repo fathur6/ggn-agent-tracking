@@ -1,0 +1,82 @@
+var CONFIG = {
+  AGENTS_SHEET_ID: 'YOUR_GOOGLE_SHEET_ID',
+  LEADS_SHEET_ID: 'YOUR_GOOGLE_SHEET_ID',
+  FORMS_SHEET_ID: 'YOUR_GOOGLE_SHEET_ID',
+  PROGRESS_SHEET_ID: 'YOUR_GOOGLE_SHEET_ID',
+  OFFER_TEMPLATE_DOC_ID: 'YOUR_GOOGLE_DOC_TEMPLATE_ID',
+  OFFER_OUTPUT_FOLDER_ID: 'YOUR_GOOGLE_DRIVE_FOLDER_ID',
+  GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID',
+};
+
+function getAppBaseUrl_() {
+  return ScriptApp.getService().getUrl();
+}
+
+var APPLICATION_ID_PREFIX = 'UGS';
+
+function getSheetByName_(spreadsheetId, sheetName) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+  return sheet;
+}
+
+function sheetToObjects_(rows) {
+  if (!rows || rows.length === 0) return [];
+  var headers = rows[0];
+  return rows.slice(1).map(function (row) {
+    var obj = {};
+    headers.forEach(function (h, i) {
+      obj[h] = row[i] || '';
+    });
+    return obj;
+  });
+}
+
+function findColumnIndex_(headers, name) {
+  var idx = headers.indexOf(name);
+  if (idx === -1) return null;
+  return idx;
+}
+
+function generateApplicationId_(spreadsheetId, sheetName) {
+  var sheet = getSheetByName_(spreadsheetId, sheetName);
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return formatDate_(new Date()).slice(0, 8) + '-001';
+  
+  var headers = data[0];
+  var appIdCol = headers.indexOf('ApplicationID');
+  if (appIdCol === -1) return formatDate_(new Date()).slice(0, 8) + '-001';
+  
+  var today = formatDate_(new Date()).slice(0, 8);
+  var maxNum = 0;
+  for (var i = 1; i < data.length; i++) {
+    var appId = data[i][appIdCol] || '';
+    if (appId.startsWith(today)) {
+      var num = parseInt(appId.split('-')[1], 10) || 0;
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return today + '-' + padNumber_(maxNum + 1, 3);
+}
+
+function formatDate_(date) {
+  var y = date.getFullYear();
+  var m = ('0' + (date.getMonth() + 1)).slice(-2);
+  var d = ('0' + date.getDate()).slice(-2);
+  return y + m + d;
+}
+
+function formatDateLong_(date) {
+  var months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
+}
+
+function padNumber_(num, size) {
+  var s = String(num);
+  while (s.length < size) s = '0' + s;
+  return s;
+}

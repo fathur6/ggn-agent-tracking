@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Styles') ?>
+</head>
+<body>
+<div class="public-form-page">
+  <div class="public-form-card">
+    <img src="https://i.postimg.cc/WzPdKT2p/GS-logo-color-light-crop.png" alt="UniSZA Graduate School" class="public-form-logo">
+    <h1>UniSZA Postgraduate Application</h1>
+    <div class="subtitle" style="text-align:center">Submit your details for a conditional offer letter</div>
+
+    <div id="form-status" class="login-error"></div>
+
+    <form id="public-form" onsubmit="event.preventDefault(); submitForm();">
+      <div class="form-group">
+        <label class="label">Full Name *</label>
+        <input id="pf-fullName" class="input" required>
+      </div>
+      <div class="form-group">
+        <label class="label">Email *</label>
+        <input id="pf-email" class="input" type="email" required>
+      </div>
+      <div class="form-group">
+        <label class="label">Passport Number *</label>
+        <input id="pf-passport" class="input" required>
+      </div>
+      <div class="form-group">
+        <label class="label">Nationality</label>
+        <select id="pf-nationality" class="select">
+          <option value="">Select country...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label">Programme Structure *</label>
+        <select id="pf-structure" class="select" onchange="filterProgrammes()">
+          <option value="">Select...</option>
+          <option value="Research">Research</option>
+          <option value="Coursework">Coursework</option>
+          <option value="Mixed-Mode">Mixed Mode</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label">Programme *</label>
+        <select id="pf-programme" class="select" required>
+          <option value="">Select programme structure first...</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Submit Application</button>
+    </form>
+
+    <div id="result-box" class="result" style="display:none">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Application Submitted!</div>
+      <div class="app-id" id="result-appId"></div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">Your conditional offer letter has been sent to your email.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Democratic Republic of the Congo","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+
+(function () {
+  var sel = document.getElementById('pf-nationality');
+  COUNTRIES.forEach(function (c) {
+    var opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  fetchProgrammes();
+})();
+
+var ALL_PROGRAMMES = [];
+
+function fetchProgrammes() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      console.log('[fetchProgrammes] success:', JSON.stringify(result));
+      if (!result.success || !result.programmes) {
+        console.log('[fetchProgrammes] empty or failed:', result);
+        return;
+      }
+      ALL_PROGRAMMES = result.programmes;
+      filterProgrammes();
+    })
+    .withFailureHandler(function(err) {
+      console.error('[fetchProgrammes] FAILED:', err);
+    })
+    .getProgrammes();
+}
+
+function filterProgrammes() {
+  var structure = document.getElementById('pf-structure').value;
+  var sel = document.getElementById('pf-programme');
+  sel.innerHTML = '';
+  if (!structure) {
+    var opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Select programme structure first...';
+    sel.appendChild(opt);
+    return;
+  }
+  var matching = ALL_PROGRAMMES.filter(function(p) { return p.mode === structure; });
+  if (matching.length === 0) {
+    var opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'No programmes found';
+    sel.appendChild(opt);
+    return;
+  }
+  var seen = {};
+  var opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = 'Select programme...';
+  sel.appendChild(opt);
+  matching.forEach(function(p) {
+    if (seen[p.programme]) return;
+    seen[p.programme] = true;
+    var opt = document.createElement('option');
+    opt.value = p.programme;
+    opt.textContent = p.programme;
+    sel.appendChild(opt);
+  });
+}
+
+function getUrlParam(name) {
+  var match = window.location.search.match(new RegExp('[?&]' + name + '=([^&]*)'));
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function submitForm() {
+  var data = {
+    fullName: document.getElementById('pf-fullName').value.trim(),
+    email: document.getElementById('pf-email').value.trim(),
+    passport: document.getElementById('pf-passport').value.trim(),
+    nationality: document.getElementById('pf-nationality').value.trim(),
+    structure: document.getElementById('pf-structure').value,
+    programme: document.getElementById('pf-programme').value.trim(),
+    agentId: getUrlParam('agentId'),
+    formId: getUrlParam('formId'),
+  };
+
+  var el = document.getElementById('form-status');
+  el.textContent = '';
+
+  if (!data.fullName || !data.email || !data.passport || !data.structure || !data.programme) {
+    el.textContent = 'Please fill all required fields';
+    return;
+  }
+
+  document.querySelector('#public-form button').disabled = true;
+  document.querySelector('#public-form button').textContent = 'Submitting...';
+
+  google.script.run.withSuccessHandler(function (result) {
+    document.querySelector('#public-form button').disabled = false;
+    document.querySelector('#public-form button').textContent = 'Submit Application';
+    if (!result.success) { el.textContent = result.error || 'Submission failed'; return; }
+    document.getElementById('public-form').style.display = 'none';
+    document.getElementById('result-box').style.display = 'block';
+    document.getElementById('result-appId').textContent = result.applicationId;
+  }).submitLead(data);
+}
+</script>
+</body>
+</html>

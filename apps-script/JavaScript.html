@@ -1,0 +1,455 @@
+<script>
+var MIN_LOADING_MS = 5000;
+var _loadingStartTime = 0;
+var _loadingBarRAF = 0;
+
+function startLoadingBar() {
+  var bar = document.getElementById('loadingBarFill');
+  if (!bar) return;
+  _loadingStartTime = Date.now();
+  if (_loadingBarRAF) cancelAnimationFrame(_loadingBarRAF);
+  bar.style.width = '0%';
+  function update() {
+    var elapsed = Date.now() - _loadingStartTime;
+    var pct = Math.min(100, (elapsed / MIN_LOADING_MS) * 100);
+    bar.style.width = pct + '%';
+    if (elapsed < MIN_LOADING_MS) _loadingBarRAF = requestAnimationFrame(update);
+  }
+  _loadingBarRAF = requestAnimationFrame(update);
+}
+
+function showLoadingOverlay() {
+  var el = document.getElementById('loadingOverlay');
+  if (!el) return;
+  el.style.display = 'flex';
+  el.classList.remove('fade-out');
+  startLoadingBar();
+}
+
+function hideLoadingOverlay() {
+  var elapsed = Date.now() - _loadingStartTime;
+  var remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+  var bar = document.getElementById('loadingBarFill');
+  if (_loadingBarRAF) cancelAnimationFrame(_loadingBarRAF);
+  if (bar) bar.style.width = '100%';
+  var doHide = function () {
+    var el = document.getElementById('loadingOverlay');
+    if (el) { el.classList.add('fade-out'); setTimeout(function () { el.style.display = 'none'; el.classList.remove('fade-out'); if (bar) bar.style.width = '0%'; }, 500); }
+  };
+  if (remaining > 0) setTimeout(doHide, remaining);
+  else doHide();
+}
+
+var COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Democratic Republic of the Congo","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkiye","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+
+var CURRENT_USER = null;
+var CURRENT_PAGE = 'dashboard';
+
+function showToast(msg, type) {
+  type = type || 'success';
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function () { el.remove(); }, 3000);
+}
+
+function navigate(page) {
+  CURRENT_PAGE = page;
+  document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+  var pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+  var nav = document.getElementById('nav-' + page);
+  if (nav) nav.classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'leads') loadLeads();
+  if (page === 'agents') loadAgents();
+  if (page === 'forms') loadForms();
+  if (window.innerWidth < 769) closeMenu();
+}
+
+function toggleMenu() {
+  document.querySelector('.sidebar').classList.toggle('open');
+}
+function closeMenu() {
+  document.querySelector('.sidebar').classList.remove('open');
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function statusBadge(status) {
+  var cls = 'badge-new';
+  if (status === 'Offer Sent') cls = 'badge-offer';
+  if (status === 'Accepted') cls = 'badge-accepted';
+  if (status === 'Enrolled') cls = 'badge-enrolled';
+  return '<span class="badge ' + cls + '">' + escapeHtml(status || 'New') + '</span>';
+}
+
+function initApp() {
+  showLoadingOverlay();
+  google.script.run
+    .withSuccessHandler(function (result) {
+      if (result.success) {
+        CURRENT_USER = result.user;
+        document.getElementById('app-shell').style.display = 'flex';
+        document.getElementById('login-page').style.display = 'none';
+        renderUserInfo();
+        navigate('dashboard');
+        hideLoadingOverlay();
+      } else {
+        hideLoadingOverlay();
+        document.getElementById('login-error').textContent = result.error || 'Authentication failed';
+      }
+    })
+    .withFailureHandler(function () {
+      hideLoadingOverlay();
+      document.getElementById('login-error').textContent = 'Unable to connect to server';
+    })
+    .getMe();
+}
+
+function logout() {
+  CURRENT_USER = null;
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('login-error').textContent = '';
+  initApp();
+}
+
+function renderUserInfo() {
+  if (!CURRENT_USER) return;
+  document.getElementById('user-name').textContent = CURRENT_USER.name;
+  document.getElementById('user-role').textContent = CURRENT_USER.role;
+  document.getElementById('user-avatar').textContent = (CURRENT_USER.name || 'U')[0].toUpperCase();
+  document.getElementById('nav-agents').style.display = CURRENT_USER.role === 'admin' ? '' : 'none';
+}
+
+function loadDashboard() {
+  var el = document.getElementById('dashboard-content');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
+    var s = result.summary;
+    var html = '<div class="stat-grid">' +
+      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">Total Leads</div><div class="stat-value primary">' + s.totalLeads + '</div></div>' +
+      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">Offers Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
+      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Accepted</div><div class="stat-value success">' + s.accepted + '</div></div>' +
+      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Enrolled</div><div class="stat-value success">' + s.enrolled + '</div></div>' +
+      '<div class="stat-card stat-card-glow-warning"><div class="stat-label">Conversion Rate</div><div class="stat-value warning">' + s.conversionRate + '%</div></div>' +
+    '</div>';
+
+    html += '<div class="grid-2"><div class="card card-accent-teal"><div class="card-title">Recent Activity</div>';
+    if (s.recentActivity.length === 0) {
+      html += '<div class="empty-state"><div class="empty-state-icon">&nbsp;</div><div class="empty-label">No recent activity</div></div>';
+    } else {
+      html += '<table><thead><tr><th>App ID</th><th>Name</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+      s.recentActivity.forEach(function (a) {
+        html += '<tr><td>' + escapeHtml(a.applicationId) + '</td><td>' + escapeHtml(a.fullName) + '</td><td>' + statusBadge(a.status) + '</td><td>' + formatDate(a.timestamp) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div><div class="card card-accent-teal"><div class="card-header-gradient">By Status</div>';
+    if (Object.keys(s.byStatus).length === 0) {
+      html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)">&nbsp;</div><div class="empty-label">No data</div></div>';
+    } else {
+      html += '<table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody>';
+      Object.keys(s.byStatus).forEach(function (k) {
+        html += '<tr><td>' + statusBadge(k) + '</td><td>' + s.byStatus[k] + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div></div>';
+    el.innerHTML = html;
+  }).getDashboard();
+}
+
+function loadLeads() {
+  var el = document.getElementById('leads-content');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { el.innerHTML = '<div class="empty">Error loading leads</div>'; return; }
+    var leads = result.leads;
+    var html = '<div class="flex-between mb-4"><div class="card-title">Leads (' + leads.length + ')</div></div>';
+    html += '<div class="card"><div class="table-wrap"><table><thead><tr>' +
+      '<th>App ID</th><th>Name</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th>' +
+      '</tr></thead><tbody>';
+    if (leads.length === 0) {
+      html += '<tr><td colspan="6" class="empty">No leads found</td></tr>';
+    } else {
+      leads.forEach(function (l) {
+        html += '<tr><td>' + escapeHtml(l.ApplicationID) + '</td><td>' + escapeHtml(l.FullName) + '</td><td>' + escapeHtml(l.Email) + '</td><td>' + escapeHtml(l.Programme) + '</td><td>' + statusBadge(l.Status) + '</td><td>' + formatDate(l.Timestamp) + '</td></tr>';
+      });
+    }
+    html += '</tbody></table></div></div>';
+    el.innerHTML = html;
+  }).getLeads();
+}
+
+function loadAgents() {
+  var el = document.getElementById('agents-content');
+  if (CURRENT_USER.role !== 'admin') { el.innerHTML = '<div class="empty">Admin access only</div>'; return; }
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { el.innerHTML = '<div class="empty">Error loading agents</div>'; return; }
+    var agents = result.agents;
+    var html = '<div class="flex-between mb-4"><div class="card-title">Agents (' + agents.length + ')</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="showAddAgentModal()">+ Add Agent</button></div>';
+    html += '<div class="card"><div class="table-wrap"><table><thead><tr>' +
+      '<th>Agent ID</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th style="width:48px">Actions</th>' +
+      '</tr></thead><tbody>';
+    if (agents.length === 0) {
+      html += '<tr><td colspan="6" class="empty">No agents found</td></tr>';
+    } else {
+      agents.forEach(function (a) {
+        var isActive = a.Status === 'active';
+        var roleBadge = a.Role === 'admin' ? ' <span class="badge badge-admin">admin</span>' : '';
+        html += '<tr>' +
+          '<td>' + escapeHtml(a.AgentID) + '</td>' +
+          '<td>' + escapeHtml(a.Name) + '</td>' +
+          '<td>' + escapeHtml(a.Email) + '</td>' +
+          '<td>' + escapeHtml(a.Role) + roleBadge + '</td>' +
+          '<td>' +
+            '<label class="agent-toggle">' +
+              '<input type="checkbox" ' + (isActive ? 'checked' : '') + ' onchange="toggleAgentStatus(\'' + escapeHtml(a.AgentID) + '\', this.checked)">' +
+              '<span class="toggle-slider"></span>' +
+            '</label>' +
+          '</td>' +
+          '<td>' +
+            '<button class="btn-icon del" onclick="handleDeleteAgent(\'' + escapeHtml(a.AgentID) + '\', \'' + escapeHtml(a.Name) + '\')" title="Delete agent">' +
+              '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>' +
+            '</button>' +
+          '</td>' +
+        '</tr>';
+      });
+    }
+    html += '</tbody></table></div></div>';
+
+    html += '<div id="agent-modal" class="modal-overlay" style="display:none"><div class="modal">' +
+      '<div class="card-title mb-4">Add Agent</div>' +
+      '<div class="form-group"><label class="label">Name *</label><input id="agent-name" class="input"></div>' +
+      '<div class="form-group"><label class="label">Email *</label><input id="agent-email" class="input" type="email"></div>' +
+      '<div class="form-group"><label class="label">Role</label><select id="agent-role" class="select"><option value="agent">Agent</option><option value="admin">Admin</option></select></div>' +
+      '<div class="flex gap-2" style="justify-content:flex-end">' +
+      '<button class="btn btn-outline btn-sm" onclick="hideAddAgentModal()">Cancel</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="createAgent()">Create</button></div></div></div>';
+    el.innerHTML = html;
+  }).getAgents();
+}
+
+function showAddAgentModal() { document.getElementById('agent-modal').style.display = 'flex'; }
+function hideAddAgentModal() { document.getElementById('agent-modal').style.display = 'none'; }
+
+function createAgent() {
+  var name = document.getElementById('agent-name').value.trim();
+  var email = document.getElementById('agent-email').value.trim();
+  var role = document.getElementById('agent-role').value;
+  if (!name || !email) { showToast('Name and email required', 'error'); return; }
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { showToast(result.error, 'error'); return; }
+    hideAddAgentModal();
+    showToast('Agent created');
+    loadAgents();
+  }).createAgent({ name: name, email: email, role: role });
+}
+
+function toggleAgentStatus(agentId, active) {
+  var status = active ? 'active' : 'inactive';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) {
+      showToast(result.error, 'error');
+      loadAgents();
+    } else {
+      showToast(active ? 'Agent activated' : 'Agent deactivated');
+    }
+  }).updateAgent(agentId, { status: status });
+}
+
+function handleDeleteAgent(agentId, name) {
+  if (!confirm('Delete agent "' + name + '"?\nThis will deactivate the agent.')) return;
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { showToast(result.error, 'error'); return; }
+    showToast('Agent deleted');
+    loadAgents();
+  }).deleteAgent(agentId);
+}
+
+function loadForms() {
+  var el = document.getElementById('forms-content');
+  el.innerHTML = '<div class="loading">Loading forms...</div>';
+  var done = false;
+  var timeoutId = setTimeout(function () {
+    if (done) return;
+    done = true;
+    el.innerHTML = '<div class="empty">Request timed out (15s). The server may be hanging on getForms().<br><small>Check Apps Script Execution logs.</small></div>';
+  }, 15000);
+  google.script.run.withSuccessHandler(function (result) {
+    if (done) return;
+    done = true;
+    clearTimeout(timeoutId);
+    console.log('[Forms] success', result);
+    try {
+      if (!result) { el.innerHTML = '<div class="empty">Error: server returned null/undefined</div>'; return; }
+      if (!result.success) { el.innerHTML = '<div class="empty">Error loading forms: ' + (result.error || 'unknown') + '</div>'; return; }
+      var forms = result.forms || [];
+      var html = '<div class="flex-between mb-4"><div class="card-title">Forms (' + forms.length + ')</div>' +
+        '<button class="btn btn-primary btn-sm" onclick="showCreateFormModal()">+ Create Form</button></div>';
+      if (forms.length === 0) {
+        html += '<div class="card"><div class="empty">No forms yet</div></div>';
+      }
+      forms.forEach(function (f) {
+        var fields = [];
+        try { fields = JSON.parse(f.EnabledFields || '[]'); } catch (e) {}
+        var title = (f.AgentName || 'Unknown') + (f.LocationEvent ? ' - ' + f.LocationEvent : '') + (f.EventDate ? ' (' + f.EventDate + ')' : '');
+        html += '<div class="card">' +
+          '<div class="flex-between mb-4"><div><strong>' + escapeHtml(title) + '</strong><br><span style="font-size:12px;color:var(--text2)">' + escapeHtml(f.FormID) + ' &middot; Active: ' + (f.Active === 'true' ? 'Yes' : 'No') + '</span></div>' +
+          '<span class="badge badge-new">' + fields.length + ' fields enabled</span></div>' +
+          '<div style="font-size:12px;color:var(--text2)">Created by: ' + escapeHtml(f.AgentName || 'Unknown') + (f.LocationEvent ? ' &middot; Location/Event: ' + escapeHtml(f.LocationEvent) : '') + (f.EventDate ? ' &middot; Date: ' + escapeHtml(f.EventDate) : '') + '</div>' +
+          (f.Remark ? '<div style="font-size:12px;color:var(--text2)">Remark: ' + escapeHtml(f.Remark) + '</div>' : '') +
+          (f.PublicURL ? '<div style="font-size:12px;color:var(--primary);word-break:break-all"><a href="' + escapeHtml(f.PublicURL) + '" target="_blank">' + escapeHtml(f.PublicURL) + '</a></div>' : '') +
+          '</div>';
+      });
+
+      html += '<div id="form-modal" class="modal-overlay" style="display:none"><div class="modal">' +
+        '<div class="card-title mb-4">Create Form</div>' +
+        '<div class="form-group"><label class="label">Agent / Admin</label><input class="input" readonly value="' + escapeHtml(CURRENT_USER && CURRENT_USER.name || '') + ' (' + escapeHtml(CURRENT_USER && CURRENT_USER.role || '') + ')"></div>' +
+        '<div class="form-group"><label class="label">Location / Event</label><input id="form-location" class="input" placeholder="e.g. Education Fair 2026, UIA"></div>' +
+        '<div class="form-group"><label class="label">Date</label><div class="cal-wrap">' +
+        '<input id="form-date" type="hidden"><div class="flex gap-2"><input id="form-date-display" class="input" readonly placeholder="Select date"><button class="date-btn" onclick="toggleCalendar()">🗓</button></div>' +
+        '<div id="cal-popup" class="cal-popup hidden"><div class="cal-nav"><button onclick="prevMonth()">◀</button><span id="cal-month-year"></span><button onclick="nextMonth()">▶</button></div><table class="cal-grid"><thead><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr></thead><tbody id="cal-body"></tbody></table></div></div></div>' +
+        '<div class="form-group"><label class="label">Remark (if any)</label><textarea id="form-remark" class="input" rows="2" placeholder="Optional notes"></textarea></div>' +
+        '<div class="form-group"><label class="label">Public URL <span style="color:var(--text2);font-size:11px">(auto-generated)</span></label><input id="form-url" class="input" readonly></div>' +
+        '<div class="flex gap-2" style="justify-content:flex-end">' +
+        '<button class="btn btn-outline btn-sm" onclick="hideCreateFormModal()">Cancel</button>' +
+        '<button class="btn btn-primary btn-sm" onclick="createForm()">Create</button></div></div></div>';
+      el.innerHTML = html;
+    } catch (e) {
+      console.error('[Forms] render error', e);
+      el.innerHTML = '<div class="empty">Render error: ' + (e.message || 'unknown') + '</div>';
+    }
+  }).withFailureHandler(function (error) {
+    if (done) return;
+    done = true;
+    clearTimeout(timeoutId);
+    console.error('[Forms] failure', error);
+    var msg = error && error.message ? error.message : String(error || 'unknown');
+    el.innerHTML = '<div class="empty">Server error: ' + msg + '</div>';
+    showToast('Error loading forms: ' + msg, 'error');
+  }).getForms();
+}
+
+var CAL_DATE = new Date();
+var CAL_SELECTED = '';
+
+function showCreateFormModal() {
+  document.getElementById('form-location').value = '';
+  CAL_SELECTED = new Date().toISOString().slice(0, 10);
+  document.getElementById('form-date').value = CAL_SELECTED;
+  document.getElementById('form-date-display').value = formatDisplayDate(CAL_SELECTED);
+  document.getElementById('form-remark').value = '';
+  document.getElementById('form-url').value = '(will be generated after creation)';
+  document.getElementById('form-modal').style.display = 'flex';
+}
+function hideCreateFormModal() { document.getElementById('form-modal').style.display = 'none'; }
+
+function createForm() {
+  var locationEvent = document.getElementById('form-location').value.trim();
+  var eventDate = CAL_SELECTED;
+  var remark = document.getElementById('form-remark').value.trim();
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { showToast(result.error, 'error'); return; }
+    hideCreateFormModal();
+    showToast('Form created! Public URL: ' + result.publicUrl);
+    loadForms();
+  }).createForm({ locationEvent: locationEvent, eventDate: eventDate, remark: remark });
+}
+
+function formatDisplayDate(iso) {
+  if (!iso) return '';
+  var parts = iso.split('-');
+  if (parts.length !== 3) return iso;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return parseInt(parts[2],10) + ' ' + months[parseInt(parts[1],10)-1] + ' ' + parts[0];
+}
+
+function toggleCalendar() {
+  var popup = document.getElementById('cal-popup');
+  if (popup.classList.contains('hidden')) {
+    CAL_DATE = CAL_SELECTED ? new Date(CAL_SELECTED + 'T00:00:00') : new Date();
+    popup.classList.remove('hidden');
+    renderCalendar();
+  } else {
+    popup.classList.add('hidden');
+  }
+}
+
+function renderCalendar() {
+  var year = CAL_DATE.getFullYear();
+  var month = CAL_DATE.getMonth();
+  document.getElementById('cal-month-year').textContent = new Date(year, month).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  var firstDay = new Date(year, month, 1).getDay();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var today = new Date().toISOString().slice(0, 10);
+  var html = '';
+  var day = 1;
+  for (var r = 0; r < 6; r++) {
+    if (day > daysInMonth) break;
+    html += '<tr>';
+    for (var c = 0; c < 7; c++) {
+      if ((r === 0 && c < firstDay) || day > daysInMonth) {
+        html += '<td></td>';
+      } else {
+        var ds = year + '-' + ('0' + (month + 1)).slice(-2) + '-' + ('0' + day).slice(-2);
+        var cls = '';
+        if (ds === today) cls += ' today';
+        if (ds === CAL_SELECTED) cls += ' selected';
+        html += '<td class="' + cls + '" onclick="selectDate(\'' + ds + '\')">' + day + '</td>';
+        day++;
+      }
+    }
+    html += '</tr>';
+  }
+  document.getElementById('cal-body').innerHTML = html;
+}
+
+function prevMonth() {
+  CAL_DATE.setMonth(CAL_DATE.getMonth() - 1);
+  renderCalendar();
+}
+
+function nextMonth() {
+  CAL_DATE.setMonth(CAL_DATE.getMonth() + 1);
+  renderCalendar();
+}
+
+function selectDate(ds) {
+  CAL_SELECTED = ds;
+  document.getElementById('form-date').value = ds;
+  document.getElementById('form-date-display').value = formatDisplayDate(ds);
+  document.getElementById('cal-popup').classList.add('hidden');
+}
+
+window.addEventListener('click', function (e) {
+  if (!e.target.closest('.cal-wrap')) {
+    document.getElementById('cal-popup').classList.add('hidden');
+  }
+});
+
+window.addEventListener('hashchange', function () {
+  var page = location.hash.replace('#', '') || 'dashboard';
+  navigate(page);
+});
+
+window.addEventListener('load', function () {
+  initApp();
+});
+</script>
