@@ -1,7 +1,7 @@
 function getDashboardSummary_(agentIdFilter) {
   var user = getCurrentUser_();
 
-  var leads = getSheetObjects_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
+  var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
 
   if (user.role === 'agent') {
     leads = leads.filter(function (l) { return l.Agent === user.name; });

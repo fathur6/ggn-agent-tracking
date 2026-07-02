@@ -121,15 +121,37 @@ function deleteAgent(agentId) {
   }
 }
 
-function getLeads(agentIdFilter) {
+function getLeads(filters) {
   try {
     var user = getCurrentUser_();
-    var leads = getSheetObjects_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
+    var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
 
     if (user.role === 'agent') {
       leads = leads.filter(function (l) { return l.Agent === user.name; });
-    } else if (user.role === 'admin' && agentIdFilter) {
-      leads = leads.filter(function (l) { return l.Agent === agentIdFilter; });
+    }
+
+    var showDeleted = filters && filters.showDeleted;
+    if (!showDeleted) {
+      leads = leads.filter(function (l) { return l.Status !== 'Deleted'; });
+    }
+
+    if (filters) {
+      if (filters.status) {
+        leads = leads.filter(function (l) { return l.Status === filters.status; });
+      }
+      if (filters.agent && user.role === 'admin') {
+        leads = leads.filter(function (l) { return l.Agent === filters.agent; });
+      }
+      if (filters.dateFrom) {
+        leads = leads.filter(function (l) {
+          return (l.Timestamp || '') >= filters.dateFrom;
+        });
+      }
+      if (filters.dateTo) {
+        leads = leads.filter(function (l) {
+          return (l.Timestamp || '') <= (filters.dateTo + 'T23:59:59.999Z');
+        });
+      }
     }
 
     leads.sort(function (a, b) { return (b.Timestamp || '').localeCompare(a.Timestamp || ''); });
@@ -142,10 +164,10 @@ function getLeads(agentIdFilter) {
 function getLead(appId) {
   try {
     var user = getCurrentUser_();
-    var found = findRowByColumn_(CONFIG.PROSPECT_SHEET_ID, 'Prospects', 'Reference', appId);
+    var found = findRowByColumn_(CONFIG.LEADS_SHEET_ID, 'Leads', 'Reference', appId);
     if (!found) throw new Error('Lead not found');
     
-    var headers = getSheetData_(CONFIG.PROSPECT_SHEET_ID, 'Prospects')[0];
+    var headers = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads')[0];
     var agentCol = headers.indexOf('Agent');
     if (user.role === 'agent' && agentCol !== -1 && found.rowData[agentCol] !== user.name) {
       throw new Error('Access denied');
@@ -160,14 +182,24 @@ function getLead(appId) {
 }
 
 function updateLead(appId, updates) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
   try {
     var user = getCurrentUser_();
 
-    var data = getSheetData_(CONFIG.PROSPECT_SHEET_ID, 'Prospects');
+    var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
     var refCol = headers.indexOf('Reference');
     var agentCol = headers.indexOf('Agent');
+    var statusCol = headers.indexOf('Status');
     var remarksCol = headers.indexOf('Remarks');
+    var nameCol = headers.indexOf('Name');
+    var emailCol = headers.indexOf('Email');
+    var passportCol = headers.indexOf('Passport');
+    var nationalityCol = headers.indexOf('Nationality');
+    var programmeCol = headers.indexOf('Programme');
+    var structureCol = headers.indexOf('Structure');
+    var locationCol = headers.indexOf('Location');
 
     if (refCol === -1) throw new Error('Reference column not found');
 
@@ -183,15 +215,42 @@ function updateLead(appId, updates) {
     }
     if (rowIndex === -1) throw new Error('Lead not found');
 
-    if (updates.remarks !== undefined && remarksCol !== -1) updateCell_(CONFIG.PROSPECT_SHEET_ID, 'Prospects', rowIndex, remarksCol, String(updates.remarks));
+    var validStatuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled', 'Deleted'];
+    if (updates.status !== undefined) {
+      if (user.role === 'agent' && user.name !== data[rowIndex][agentCol]) {
+        throw new Error('Access denied');
+      }
+      if (validStatuses.indexOf(updates.status) === -1) throw new Error('Invalid status: ' + updates.status);
+      updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, statusCol, updates.status);
+    }
+    if (updates.remarks !== undefined && remarksCol !== -1) {
+      if (user.role === 'agent' && user.name !== data[rowIndex][agentCol]) {
+        throw new Error('Access denied');
+      }
+      updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, remarksCol, String(updates.remarks));
+    }
+
+    if (user.role === 'admin') {
+      if (updates.name !== undefined && nameCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, nameCol, updates.name);
+      if (updates.email !== undefined && emailCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, emailCol, updates.email);
+      if (updates.passport !== undefined && passportCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, passportCol, updates.passport);
+      if (updates.nationality !== undefined && nationalityCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, nationalityCol, updates.nationality);
+      if (updates.programme !== undefined && programmeCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, programmeCol, updates.programme);
+      if (updates.structure !== undefined && structureCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, structureCol, updates.structure);
+      if (updates.location !== undefined && locationCol !== -1) updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, locationCol, updates.location);
+    }
 
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function submitLead(leadData) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
   try {
     if (!leadData.fullName || !leadData.email || !leadData.passport) {
       throw new Error('Full name, email, and passport are required');
@@ -233,6 +292,7 @@ function submitLead(leadData) {
       fullName: leadData.fullName,
       email: leadData.email,
       passport: leadData.passport,
+      nationality: leadData.nationality || '',
       structure: leadData.structure || '',
       programme: leadData.programme || '',
       agentId: leadData.agentId || '',
@@ -246,6 +306,62 @@ function submitLead(leadData) {
     return { success: true, applicationId: result.applicationId, pdfUrl: result.pdfUrl };
   } catch (e) {
     return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteLead(appId) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var headers = data[0];
+    var refCol = headers.indexOf('Reference');
+    var statusCol = headers.indexOf('Status');
+    if (refCol === -1 || statusCol === -1) throw new Error('Required columns not found');
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][refCol] === appId) {
+        updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', i, statusCol, 'Deleted');
+        return { success: true };
+      }
+    }
+    throw new Error('Lead not found');
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function restoreLead(appId) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var headers = data[0];
+    var refCol = headers.indexOf('Reference');
+    var statusCol = headers.indexOf('Status');
+    if (refCol === -1 || statusCol === -1) throw new Error('Required columns not found');
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][refCol] === appId) {
+        updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', i, statusCol, 'New');
+        return { success: true };
+      }
+    }
+    throw new Error('Lead not found');
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 

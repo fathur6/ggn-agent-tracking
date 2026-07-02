@@ -88,11 +88,13 @@ function escapeHtml(str) {
 }
 
 function statusBadge(status) {
+  var s = status || 'New';
   var cls = 'badge-new';
-  if (status === 'Offer Sent') cls = 'badge-offer';
-  if (status === 'Accepted') cls = 'badge-accepted';
-  if (status === 'Enrolled') cls = 'badge-enrolled';
-  return '<span class="badge ' + cls + '">' + escapeHtml(status || 'New') + '</span>';
+  if (s === 'Offer Sent') cls = 'badge-offer-sent';
+  if (s === 'Accepted') cls = 'badge-accepted';
+  if (s === 'Enrolled') cls = 'badge-enrolled';
+  if (s === 'Deleted') cls = 'badge-deleted';
+  return '<span class="badge ' + cls + '">' + escapeHtml(s) + '</span>';
 }
 
 function initApp() {
@@ -173,26 +175,216 @@ function loadDashboard() {
   }).getDashboard();
 }
 
-function loadLeads() {
+function loadLeads(filters) {
   var el = document.getElementById('leads-content');
   el.innerHTML = '<div class="loading">Loading...</div>';
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { el.innerHTML = '<div class="empty">Error loading leads</div>'; return; }
     var leads = result.leads;
-    var html = '<div class="flex-between mb-4"><div class="card-title">Leads (' + leads.length + ')</div></div>';
-    html += '<div class="card"><div class="table-wrap"><table><thead><tr>' +
-      '<th>App ID</th><th>Name</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th>' +
-      '</tr></thead><tbody>';
-    if (leads.length === 0) {
-      html += '<tr><td colspan="6" class="empty">No leads found</td></tr>';
-    } else {
-      leads.forEach(function (l) {
-        html += '<tr><td>' + escapeHtml(l.ApplicationID) + '</td><td>' + escapeHtml(l.FullName) + '</td><td>' + escapeHtml(l.Email) + '</td><td>' + escapeHtml(l.Programme) + '</td><td>' + statusBadge(l.Status) + '</td><td>' + formatDate(l.Timestamp) + '</td></tr>';
+    var isAdmin = CURRENT_USER.role === 'admin';
+    renderLeadsView(leads, isAdmin);
+  }).getLeads(filters || {});
+}
+
+function renderLeadsView(leads, isAdmin) {
+  var el = document.getElementById('leads-content');
+  var titleClass = isAdmin ? 'card-title leads-title' : 'card-title';
+  var html = '<div class="flex-between mb-4"><div class="' + titleClass + '">Leads (' + leads.length + ')</div></div>';
+
+  html += renderFilterBar(leads, isAdmin);
+  html += '<div class="card leads-card"><div class="table-wrap"><table><thead><tr>' +
+    '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:52px">Action</th>' +
+    '</tr></thead><tbody>';
+
+  if (leads.length === 0) {
+    html += '<tr><td colspan="8" class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No leads found</div></td></tr>';
+  } else {
+    leads.forEach(function (l) {
+      var isDeleted = l.Status === 'Deleted';
+      var rowClass = isDeleted ? ' style="opacity:0.5"' : '';
+      html += '<tr' + rowClass + '>' +
+        '<td class="app-id-cell">' + escapeHtml(l.Reference) + '</td>' +
+        '<td>' + escapeHtml(l.Name) + '</td>' +
+        '<td>' + escapeHtml(l.Nationality) + '</td>' +
+        '<td>' + escapeHtml(l.Email) + '</td>' +
+        '<td>' + escapeHtml(l.Programme) + '</td>' +
+        '<td>' + statusBadge(l.Status) + '</td>' +
+        '<td>' + formatDate(l.Timestamp) + '</td>' +
+        '<td class="action-cell">' +
+          '<button class="action-menu-trigger" onclick="toggleActionMenu(\'' + escapeHtml(l.Reference) + '\')">⋮</button>' +
+          '<div id="menu-' + escapeHtml(l.Reference) + '" class="action-menu" style="display:none">' +
+            '<div class="action-menu-item" onclick="viewLead(\'' + escapeHtml(l.Reference) + '\')">View</div>' +
+            '<div class="action-menu-item" onclick="editLeadModal(\'' + escapeHtml(l.Reference) + '\')">Edit</div>' +
+            (isAdmin && isDeleted
+              ? '<div class="action-menu-item" onclick="restoreLeadAction(\'' + escapeHtml(l.Reference) + '\')">Restore</div>'
+              : (isAdmin ? '<div class="action-menu-item danger" onclick="deleteLeadAction(\'' + escapeHtml(l.Reference) + '\')">Delete</div>' : '')) +
+          '</div>' +
+        '</td>' +
+        '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function renderFilterBar(leads, isAdmin) {
+  var statuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled', 'Deleted'];
+  var statusOpts = '<option value="">All Statuses</option>';
+  statuses.forEach(function (s) { statusOpts += '<option value="' + s + '" ' + (filterState.status === s ? 'selected' : '') + '>' + s + '</option>'; });
+
+  var agents = [];
+  var seen = {};
+  leads.forEach(function (l) { if (!seen[l.Agent]) { seen[l.Agent] = true; agents.push(l.Agent); } });
+  var agentOpts = '<option value="">All Agents</option>';
+  agents.forEach(function (a) { agentOpts += '<option value="' + escapeHtml(a) + '" ' + (filterState.agent === a ? 'selected' : '') + '>' + escapeHtml(a) + '</option>'; });
+
+  var html = '<div class="filter-bar">' +
+    '<select id="f-status" class="select filter-select">' + statusOpts + '</select>' +
+    (isAdmin ? '<select id="f-agent" class="select filter-select">' + agentOpts + '</select>' : '') +
+    '<input type="date" id="f-date-from" class="input filter-input" value="' + (filterState.dateFrom || '') + '" placeholder="From">' +
+    '<input type="date" id="f-date-to" class="input filter-input" value="' + (filterState.dateTo || '') + '" placeholder="To">' +
+    (isAdmin ? '<label class="checkbox-label"><input type="checkbox" id="f-show-deleted" ' + (filterState.showDeleted ? 'checked' : '') + ' onchange="applyFilters()"> Show deleted</label>' : '') +
+    '<button class="btn btn-sm btn-primary" onclick="applyFilters()">Apply</button>' +
+    '<button class="btn btn-sm btn-outline" onclick="clearFilters()">Clear</button>' +
+    '</div>';
+  return html;
+}
+
+var filterState = { status: '', agent: '', dateFrom: '', dateTo: '', showDeleted: false };
+
+function applyFilters() {
+  filterState.status = document.getElementById('f-status') ? document.getElementById('f-status').value : '';
+  filterState.agent = document.getElementById('f-agent') ? document.getElementById('f-agent').value : '';
+  filterState.dateFrom = document.getElementById('f-date-from') ? document.getElementById('f-date-from').value : '';
+  filterState.dateTo = document.getElementById('f-date-to') ? document.getElementById('f-date-to').value : '';
+  var showDeletedEl = document.getElementById('f-show-deleted');
+  filterState.showDeleted = showDeletedEl ? showDeletedEl.checked : false;
+  loadLeads(filterState);
+}
+
+function clearFilters() {
+  filterState = { status: '', agent: '', dateFrom: '', dateTo: '', showDeleted: false };
+  loadLeads();
+}
+
+function toggleActionMenu(appId) {
+  var menu = document.getElementById('menu-' + appId);
+  var allMenus = document.querySelectorAll('.action-menu');
+  allMenus.forEach(function (m) { if (m !== menu) m.style.display = 'none'; });
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  if (menu.style.display === 'block') {
+    setTimeout(function () {
+      document.addEventListener('click', function handler(e) {
+        if (!menu.contains(e.target) && e.target.className.indexOf('action-menu-trigger') === -1) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', handler);
+        }
       });
-    }
-    html += '</tbody></table></div></div>';
-    el.innerHTML = html;
-  }).getLeads();
+    }, 10);
+  }
+}
+
+function viewLead(appId) {
+  closeAllMenus();
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { alert(result.error); return; }
+    var l = result.lead;
+    var html = '<div class="modal-overlay" style="display:flex" onclick="closeLeadModal(event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+      '<div class="flex-between mb-4"><div class="card-title">Lead Detail</div><button class="btn btn-outline btn-sm" onclick="closeLeadModal()">Close</button></div>' +
+      '<div class="form-group"><label class="label">App ID</label><div class="detail-value">' + escapeHtml(l.Reference) + '</div></div>' +
+      '<div class="form-group"><label class="label">Name</label><div class="detail-value">' + escapeHtml(l.Name) + '</div></div>' +
+      '<div class="form-group"><label class="label">Email</label><div class="detail-value">' + escapeHtml(l.Email) + '</div></div>' +
+      '<div class="form-group"><label class="label">Passport</label><div class="detail-value">' + escapeHtml(l.Passport) + '</div></div>' +
+      '<div class="form-group"><label class="label">Nationality</label><div class="detail-value">' + escapeHtml(l.Nationality) + '</div></div>' +
+      '<div class="form-group"><label class="label">Programme</label><div class="detail-value">' + escapeHtml(l.Programme) + '</div></div>' +
+      '<div class="form-group"><label class="label">Structure</label><div class="detail-value">' + escapeHtml(l.Structure) + '</div></div>' +
+      '<div class="form-group"><label class="label">Agent</label><div class="detail-value">' + escapeHtml(l.Agent) + '</div></div>' +
+      '<div class="form-group"><label class="label">Location</label><div class="detail-value">' + escapeHtml(l.Location) + '</div></div>' +
+      '<div class="form-group"><label class="label">Remarks</label><div class="detail-value">' + escapeHtml(l.Remarks) + '</div></div>' +
+      '<div class="form-group"><label class="label">Status</label><div class="detail-value">' + statusBadge(l.Status) + '</div></div>' +
+      '<div class="form-group"><label class="label">Date</label><div class="detail-value">' + formatDate(l.Timestamp) + '</div></div>' +
+      '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }).getLead(appId);
+}
+
+function editLeadModal(appId) {
+  closeAllMenus();
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { alert(result.error); return; }
+    var l = result.lead;
+    var isAdmin = CURRENT_USER.role === 'admin';
+    var statusOpts = '';
+    ['New', 'Offer Sent', 'Accepted', 'Enrolled'].forEach(function (s) {
+      statusOpts += '<option value="' + s + '" ' + (l.Status === s ? 'selected' : '') + '>' + s + '</option>';
+    });
+
+    var html = '<div class="modal-overlay" style="display:flex" onclick="closeLeadModal(event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+      '<div class="flex-between mb-4"><div class="card-title">Edit Lead</div><button class="btn btn-outline btn-sm" onclick="closeLeadModal()">Close</button></div>' +
+      '<div class="form-group"><label class="label">App ID</label><div class="detail-value">' + escapeHtml(l.Reference) + '</div></div>' +
+      (isAdmin ? '<div class="form-group"><label class="label">Name</label><input id="ed-name" class="input" value="' + escapeHtml(l.Name) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Email</label><input id="ed-email" class="input" type="email" value="' + escapeHtml(l.Email) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Passport</label><input id="ed-passport" class="input" value="' + escapeHtml(l.Passport) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Nationality</label><input id="ed-nationality" class="input" value="' + escapeHtml(l.Nationality) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Programme</label><input id="ed-programme" class="input" value="' + escapeHtml(l.Programme) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Structure</label><input id="ed-structure" class="input" value="' + escapeHtml(l.Structure) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Location</label><input id="ed-location" class="input" value="' + escapeHtml(l.Location) + '"></div>' : '') +
+      '<div class="form-group"><label class="label">Remarks</label><textarea id="ed-remarks" class="input">' + escapeHtml(l.Remarks) + '</textarea></div>' +
+      '<div class="form-group"><label class="label">Status</label><select id="ed-status" class="select">' + statusOpts + '</select></div>' +
+      '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+      '<button class="btn btn-outline btn-sm" onclick="closeLeadModal()">Cancel</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="saveLeadEdit(\'' + escapeHtml(appId) + '\')">Save</button></div>' +
+      '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }).getLead(appId);
+}
+
+function saveLeadEdit(appId) {
+  var updates = {};
+  if (CURRENT_USER.role === 'admin') {
+    var edName = document.getElementById('ed-name'); if (edName) updates.name = edName.value;
+    var edEmail = document.getElementById('ed-email'); if (edEmail) updates.email = edEmail.value;
+    var edPassport = document.getElementById('ed-passport'); if (edPassport) updates.passport = edPassport.value;
+    var edNationality = document.getElementById('ed-nationality'); if (edNationality) updates.nationality = edNationality.value;
+    var edProgramme = document.getElementById('ed-programme'); if (edProgramme) updates.programme = edProgramme.value;
+    var edStructure = document.getElementById('ed-structure'); if (edStructure) updates.structure = edStructure.value;
+    var edLocation = document.getElementById('ed-location'); if (edLocation) updates.location = edLocation.value;
+  }
+  var edRemarks = document.getElementById('ed-remarks'); if (edRemarks) updates.remarks = edRemarks.value;
+  var edStatus = document.getElementById('ed-status'); if (edStatus) updates.status = edStatus.value;
+
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { alert(r.error); return; }
+    closeLeadModal();
+    applyFilters();
+  }).updateLead(appId, updates);
+}
+
+function deleteLeadAction(appId) {
+  if (!confirm('Delete this lead? This can be restored later.')) return;
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { alert(r.error); return; }
+    applyFilters();
+  }).deleteLead(appId);
+}
+
+function restoreLeadAction(appId) {
+  if (!confirm('Restore this lead?')) return;
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { alert(r.error); return; }
+    applyFilters();
+  }).restoreLead(appId);
+}
+
+function closeAllMenus() {
+  var menus = document.querySelectorAll('.action-menu');
+  menus.forEach(function (m) { m.style.display = 'none'; });
+}
+
+function closeLeadModal(e) {
+  var overlay = document.querySelector('.modal-overlay');
+  if (overlay) overlay.remove();
+  if (e && e.target !== e.currentTarget) return;
 }
 
 function loadAgents() {
