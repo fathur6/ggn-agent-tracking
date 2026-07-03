@@ -5,3 +5,11 @@ dist/
 *.log
 apps-script/Config.gs
 .playwright-mcp/
+*.png
+[input removed due to failed tool call]
+apps-script/.supergas/
+*.png
+v*.md
+*.yml
+*.log
+public-form-test.png

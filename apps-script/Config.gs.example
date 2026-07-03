@@ -5,7 +5,10 @@ var CONFIG = {
   PROGRESS_SHEET_ID: 'YOUR_GOOGLE_SHEET_ID',
   OFFER_TEMPLATE_DOC_ID: 'YOUR_GOOGLE_DOC_TEMPLATE_ID',
   OFFER_OUTPUT_FOLDER_ID: 'YOUR_GOOGLE_DRIVE_FOLDER_ID',
-  GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID',
+  GOOGLE_CLIENT_ID: '',
+  EMAIL_FROM: 'pps@unisza.edu.my',
+  EMAIL_CC: 'pps_gs-student-affair@unisza.edu.my',
+  EMAIL_REPLY_TO: 'pps_gs-student-affair@unisza.edu.my',
 };
 
 function getAppBaseUrl_() {
@@ -47,7 +50,7 @@ function generateApplicationId_(spreadsheetId, sheetName) {
   if (data.length <= 1) return formatDate_(new Date()).slice(0, 8) + '-001';
   
   var headers = data[0];
-  var appIdCol = headers.indexOf('ApplicationID');
+  var appIdCol = headers.indexOf('Reference');
   if (appIdCol === -1) return formatDate_(new Date()).slice(0, 8) + '-001';
   
   var today = formatDate_(new Date()).slice(0, 8);

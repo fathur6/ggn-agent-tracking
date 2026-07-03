@@ -32,28 +32,13 @@ function generateAndSendOffer_(input) {
 
     var pdfBlob = DriveApp.getFileById(docId).getAs('application/pdf');
     var pdfFilename = 'UNISZA Conditional Offer - ' + (input.fullName || 'Student') + '.pdf';
-    var folder = DriveApp.getFolderById(CONFIG.OFFER_OUTPUT_FOLDER_ID);
-    var pdfFile = folder.createFile(pdfBlob).setName(pdfFilename);
+    var pdfFile = DriveApp.getFolderById(CONFIG.OFFER_OUTPUT_FOLDER_ID).createFile(pdfBlob).setName(pdfFilename);
     var pdfUrl = pdfFile.getUrl();
 
     copiedDoc.setTrashed(true);
 
     var sheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 13).getValues()[0];
-
-    ensureHeader_(sheet, headers, 'Timestamp');
-    ensureHeader_(sheet, headers, 'FormID');
-    ensureHeader_(sheet, headers, 'Agent');
-    ensureHeader_(sheet, headers, 'Location');
-    ensureHeader_(sheet, headers, 'Remarks');
-    ensureHeader_(sheet, headers, 'Reference');
-    ensureHeader_(sheet, headers, 'Name');
-    ensureHeader_(sheet, headers, 'Email');
-    ensureHeader_(sheet, headers, 'Passport');
-    ensureHeader_(sheet, headers, 'Nationality');
-    ensureHeader_(sheet, headers, 'Programme');
-    ensureHeader_(sheet, headers, 'Structure');
-    ensureHeader_(sheet, headers, 'Status');
+    ensureLeadsHeaders_(sheet);
 
     var rowValues = [
       now.toISOString(),
@@ -97,6 +82,7 @@ function generateAndSendOffer_(input) {
     GmailApp.sendEmail(input.email, 'Conditional Offer - Universiti Sultan Zainal Abidin', emailBody, {
       attachments: [pdfBlob],
       name: 'UniSZA Graduate School',
+      from: CONFIG.EMAIL_FROM,
       cc: ccEmails.join(','),
       replyTo: CONFIG.EMAIL_REPLY_TO,
     });
@@ -107,8 +93,41 @@ function generateAndSendOffer_(input) {
   }
 }
 
-function ensureHeader_(sheet, headers, name) {
-  if (headers.indexOf(name) === -1) {
-    sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+function ensureLeadsHeaders_(sheet) {
+  var LEADS_HEADERS = [
+    'Timestamp', 'FormID', 'Agent', 'Location', 'Remarks',
+    'Reference', 'Name', 'Email', 'Passport', 'Nationality',
+    'Programme', 'Structure', 'Status',
+  ];
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length === 0) {
+    sheet.appendRow(LEADS_HEADERS);
+    return;
+  }
+
+  var existing = data[0];
+  if (existing[0] === 'Timestamp' && existing.length === LEADS_HEADERS.length) {
+    var match = true;
+    for (var i = 0; i < LEADS_HEADERS.length; i++) {
+      if (existing[i] !== LEADS_HEADERS[i]) { match = false; break; }
+    }
+    if (match) return;
+  }
+
+  if (data.length === 1 || !data[0] || String(data[0][0]) === '') {
+    sheet.getRange(1, 1, 1, LEADS_HEADERS.length).setValues([LEADS_HEADERS]);
+    return;
+  }
+
+  var isDirty = false;
+  for (var j = 0; j < LEADS_HEADERS.length; j++) {
+    if (j >= existing.length || existing[j] !== LEADS_HEADERS[j]) {
+      isDirty = true;
+      break;
+    }
+  }
+  if (isDirty) {
+    throw new Error('Leads sheet has data but mismatched headers. Delete the Leads sheet and re-submit the form to auto-create with correct columns.');
   }
 }

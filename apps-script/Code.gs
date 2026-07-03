@@ -434,7 +434,7 @@ function ensureFormHeaders_() {
   var sheet = getSheetByName_(CONFIG.FORMS_SHEET_ID, 'Forms');
   var data = sheet.getDataRange().getValues();
   if (data.length === 0 || !data[0] || data[0][0] !== 'FormID') {
-    var headers = ['FormID','FormName','AgentID','AgentName','DefaultFields','EnabledFields','Active','CreatedAt','LocationEvent','Remark','PublicURL','EventDate'];
+    var headers = ['FormID','FormName','AgentID','AgentName','DefaultFields','EnabledFields','Active','CreatedAt','LocationEvent','Remark','PublicURL','EventDate','DeleteRequest'];
     if (data.length > 0) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     } else {
@@ -478,6 +478,7 @@ function createForm(formData) {
       remark,
       publicUrl,
       eventDate,
+      '', // DeleteRequest
     ];
     appendRow_(CONFIG.FORMS_SHEET_ID, 'Forms', row);
     return { success: true, formId: formId, publicUrl: publicUrl };
@@ -501,6 +502,7 @@ function updateForm(formId, updates) {
     var locationEventCol = headers.indexOf('LocationEvent');
     var remarkCol = headers.indexOf('Remark');
     var eventDateCol = headers.indexOf('EventDate');
+    var deleteReqCol = headers.indexOf('DeleteRequest');
 
     if (formIdCol === -1) throw new Error('FormID column not found');
 
@@ -522,6 +524,7 @@ function updateForm(formId, updates) {
     if (updates.locationEvent !== undefined && locationEventCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, locationEventCol, updates.locationEvent);
     if (updates.remark !== undefined && remarkCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, remarkCol, updates.remark);
     if (updates.eventDate !== undefined && eventDateCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, eventDateCol, updates.eventDate);
+    if (updates.deleteRequest !== undefined && deleteReqCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, deleteReqCol, updates.deleteRequest);
 
     return { success: true };
   } catch (e) {
@@ -532,21 +535,93 @@ function updateForm(formId, updates) {
 function deleteForm(formId) {
   try {
     var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
+    var headers = data[0];
+    var formIdCol = headers.indexOf('FormID');
+    var activeCol = headers.indexOf('Active');
+    if (formIdCol === -1) throw new Error('FormID column not found');
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][formIdCol] === formId) {
+        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, activeCol, 'false');
+        return { success: true };
+      }
+    }
+    throw new Error('Form not found');
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function getForm(formId) {
+  try {
+    var user = getCurrentUser_();
+    var found = findRowByColumn_(CONFIG.FORMS_SHEET_ID, 'Forms', 'FormID', formId);
+    if (!found) throw new Error('Form not found');
+
+    var headers = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms')[0];
+    var agentIdCol = headers.indexOf('AgentID');
+    if (user.role === 'agent' && agentIdCol !== -1 && found.rowData[agentIdCol] !== user.agentId) {
+      throw new Error('Access denied');
+    }
+
+    var form = {};
+    headers.forEach(function (h, i) { form[h] = found.rowData[i] || ''; });
+    return { success: true, form: form };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function requestDeleteForm(formId, reason) {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'agent') throw new Error('Only agents can request deletion');
 
     var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
     var headers = data[0];
     var formIdCol = headers.indexOf('FormID');
     var agentIdCol = headers.indexOf('AgentID');
-    var activeCol = headers.indexOf('Active');
+    var deleteReqCol = headers.indexOf('DeleteRequest');
 
     if (formIdCol === -1) throw new Error('FormID column not found');
-    
+    if (deleteReqCol === -1) throw new Error('DeleteRequest column not found');
+
     for (var i = 1; i < data.length; i++) {
       if (data[i][formIdCol] === formId) {
-        if (user.role === 'agent' && agentIdCol !== -1 && data[i][agentIdCol] !== user.agentId) {
-          throw new Error('Access denied');
-        }
-        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, activeCol, 'false');
+        if (agentIdCol !== -1 && data[i][agentIdCol] !== user.agentId) throw new Error('Access denied');
+        var reasonText = reason ? String(reason).trim() : 'No reason given';
+        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, deleteReqCol, reasonText + ' | requested by: ' + (user.name || user.agentId));
+        return { success: true };
+      }
+    }
+    throw new Error('Form not found');
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function approveDeleteForm(formId) {
+  return deleteForm(formId);
+}
+
+function rejectDeleteRequest(formId) {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
+    var headers = data[0];
+    var formIdCol = headers.indexOf('FormID');
+    var deleteReqCol = headers.indexOf('DeleteRequest');
+
+    if (formIdCol === -1 || deleteReqCol === -1) throw new Error('Required columns not found');
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][formIdCol] === formId) {
+        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, deleteReqCol, '');
         return { success: true };
       }
     }
@@ -560,6 +635,22 @@ function getDashboard(agentIdFilter) {
   try {
     var summary = getDashboardSummary_(agentIdFilter);
     return { success: true, summary: summary };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function resetAllForms() {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    var sheet = getSheetByName_(CONFIG.FORMS_SHEET_ID, 'Forms');
+    var data = sheet.getDataRange().getValues();
+    if (data.length > 1) {
+      sheet.getRange(2, 1, data.length - 1, data[0].length || 12).clearContent();
+    }
+    ensureFormHeaders_();
+    return { success: true, cleared: data.length > 1 ? data.length - 1 : 0 };
   } catch (e) {
     return { success: false, error: e.message };
   }
