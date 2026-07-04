@@ -135,8 +135,14 @@ body {
 .main-content {
   margin-left: 260px;
   margin-top: 56px;
-  padding: 24px;
+  padding: 24px 32px;
   min-height: calc(100vh - 56px);
+  width: calc(100% - 260px);
+  box-sizing: border-box;
+}
+@media (min-width: 1400px) {
+  .main-content { padding: 32px 48px; }
+  .stat-grid { gap: 20px; }
 }
 
 .page { display: none; }
@@ -460,6 +466,10 @@ tr:hover td { background: var(--surface2); }
 .del-confirm:hover { background: rgba(248,113,113,0.1); border-color: #f87171; }
 .del-btn { color: #f87171; border-color: rgba(248,113,113,0.4); }
 .del-btn:hover { background: rgba(248,113,113,0.1); border-color: #f87171; }
+.edit-btn { color: var(--primary); border-color: rgba(79,70,229,0.4); }
+.edit-btn:hover { background: rgba(79,70,229,0.1); border-color: var(--primary); }
+.activate-btn { color: var(--success); border-color: rgba(34,197,94,0.4); }
+.activate-btn:hover { background: rgba(34,197,94,0.1); border-color: var(--success); }
 .btn-ghost { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 4px 10px; border-radius: 6px; }
 .btn-ghost:hover { background: rgba(20,184,166,0.1); }
 
@@ -511,13 +521,35 @@ tr:hover td { background: var(--surface2); }
 }
 .greeting-btn:hover { background: #f59e0b; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(251,191,36,0.3); }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .sidebar { transform: translateX(-100%); transition: transform 0.2s; }
   .sidebar.open { transform: translateX(0); }
   .header { left: 0; }
-  .main-content { margin-left: 0; }
+  .main-content { margin-left: 0; width: 100%; }
   .menu-btn { display: block; }
-  .stat-grid { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
+  .stat-grid-5 { grid-template-columns: repeat(2, 1fr) !important; }
+  .forms-table th, .forms-table td { padding: 6px 8px; font-size: 12px; }
+  .form-action-cell { flex-wrap: wrap; width: auto !important; }
+  .form-action-cell .btn { padding: 3px 8px; font-size: 11px; }
+}
+
+@media (max-width: 768px) {
+  .main-content { padding: 16px; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .forms-table th, .forms-table td { padding: 4px 6px; font-size: 11px; }
+  .form-name-cell br + .badge { margin-top: 4px; display: inline-block; }
+  .public-form-card { padding: 20px; }
+}
+
+@media (max-width: 480px) {
+  .header { padding: 0 12px; }
+  .user-info { gap: 6px; }
+  .user-name { font-size: 12px; }
+  .stat-grid { grid-template-columns: 1fr; gap: 10px; }
+  .modal { padding: 16px; max-width: 95%; }
+  .form-action-cell { flex-direction: column; align-items: stretch; }
+  .form-action-cell .btn { width: 100%; }
 }
 </style>

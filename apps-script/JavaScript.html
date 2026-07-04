@@ -573,7 +573,7 @@ function renderFormsTimeline(forms, isAdmin) {
             '<span class="month-count">' + m.forms.length + '</span>' +
           '</div>' +
           '<div class="forms-table-wrap" id="' + monthId + '" data-month="' + m.key + '" data-agent="' + escapeHtml(agent.agentName) + '">' +
-          '<table class="forms-table"><thead><tr><th>Form Name</th><th>Date</th><th>Location</th><th>Link</th><th style="width:180px">Action</th></tr></thead><tbody>';
+          '<table class="forms-table"><thead><tr><th>Form Name</th><th>Date</th><th>Location</th><th>Link</th><th style="width:260px">Action</th></tr></thead><tbody>';
         m.forms.forEach(function (f) {
           var isInactive = f.Active !== 'true';
           var hasPendingRequest = f.DeleteRequest && !isInactive;
@@ -588,20 +588,20 @@ function renderFormsTimeline(forms, isAdmin) {
             '<td>' + escapeHtml(f.LocationEvent || '—') + '</td>' +
             '<td class="form-link-cell"><a href="' + escapeHtml(f.PublicURL || '#') + '" target="_blank">Open</a></td>' +
             '<td class="form-action-cell">' +
-              '<button class="btn btn-sm btn-ghost" onclick="showFormDetail(\'' + escapeHtml(f.FormID) + '\')">View</button>';
+              '<button class="btn btn-sm btn-ghost" onclick="showFormDetail(\'' + escapeHtml(f.FormID) + '\')">View</button>' +
+              '<button class="btn btn-sm btn-outline edit-btn" onclick="editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>';
+
           if (isAdmin) {
             if (hasPendingRequest) {
               html += '<button class="btn btn-sm btn-primary" onclick="approveDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Approve</button>' +
                 '<button class="btn btn-sm btn-outline" onclick="rejectDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Reject</button>';
-            } else if (!isInactive) {
+            } else if (isInactive) {
+              html += '<button class="btn btn-sm btn-outline activate-btn" onclick="activateFormAction(\'' + escapeHtml(f.FormID) + '\')">Activate</button>';
+            } else {
               html += '<button class="btn btn-sm btn-outline del-btn" onclick="adminDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
             }
-          } else {
-            if (hasPendingRequest) {
-              html += '<span class="text-small text-muted">Requested</span>';
-            } else if (!isInactive) {
-              html += '<button class="btn btn-sm btn-outline" onclick="suggestDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Suggest Delete</button>';
-            }
+          } else if (!isInactive) {
+            html += '<button class="btn btn-sm btn-outline" onclick="suggestDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
           }
           html += '</td></tr>';
         });
@@ -738,6 +738,123 @@ function closeFormDetail(e) {
   if (e && e.target !== document.getElementById('form-detail-overlay')) return;
   var overlay = document.getElementById('form-detail-overlay');
   if (overlay) overlay.style.display = 'none';
+}
+
+function editFormModal(formId) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      if (!result.success) { showToast(result.error, 'error'); return; }
+      var f = result.form;
+
+      var overlayId = 'edit-form-overlay-' + formId.replace(/\W/g, '');
+      var modalId = 'edit-form-modal-' + formId.replace(/\W/g, '');
+
+      var html = '<div id="' + overlayId + '" class="modal-overlay" style="display:flex" onclick="closeEditFormModal(\'' + overlayId + '\')"><div id="' + modalId + '" class="modal form-detail-modal" onclick="event.stopPropagation()">' +
+        '<div class="flex-between mb-4"><div class="card-title">Edit Form — ' + escapeHtml(f.FormName || f.FormID) + '</div><button class="btn btn-outline btn-sm" onclick="closeEditFormModal(\'' + overlayId + '\')">Close</button></div>' +
+        '<div class="form-group"><label class="label">Location / Event</label><input id="edit-form-location" class="input" value="' + escapeHtml(f.LocationEvent || '') + '" placeholder="e.g. Education Fair 2026, UIA"></div>' +
+        '<div class="form-group"><label class="label">Date</label><div class="cal-wrap">' +
+          '<input id="edit-form-date" type="hidden" value="' + escapeHtml(f.EventDate || '') + '">' +
+          '<div class="flex gap-2">' +
+            '<input id="edit-form-date-display" class="input" readonly value="' + escapeHtml(formatDisplayDate(f.EventDate) || '') + '" placeholder="Select date">' +
+            '<button type="button" class="date-btn" onclick="toggleEditCalendar()">\uD83D\uDDD3</button>' +
+          '</div>' +
+          '<div id="edit-cal-popup" class="cal-popup hidden">' +
+            '<div class="cal-nav"><button onclick="prevEditMonth()">\u25C0</button><span id="edit-cal-month-year"></span><button onclick="nextEditMonth()">\u25B6</button></div>' +
+            '<table class="cal-grid"><thead><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr></thead><tbody id="edit-cal-body"></tbody></table>' +
+          '</div>' +
+        '</div></div>' +
+        '<div class="form-group"><label class="label">Remark (if any)</label><textarea id="edit-form-remark" class="input" rows="2" placeholder="Optional notes">' + escapeHtml(f.Remark || '') + '</textarea></div>' +
+        '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+          '<button class="btn btn-outline btn-sm" onclick="closeEditFormModal(\'' + overlayId + '\')">Cancel</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="saveFormEdit(\'' + escapeHtml(f.FormID) + '\', \'' + overlayId + '\')">Save Changes</button>' +
+        '</div></div></div>';
+      document.body.insertAdjacentHTML('beforeend', html);
+
+      EDIT_CAL_DATE = f.EventDate ? new Date(f.EventDate + 'T00:00:00') : new Date();
+      EDIT_CAL_SELECTED = f.EventDate || '';
+      renderEditCalendar();
+    })
+    .withFailureHandler(function (err) { showToast('Error: ' + (err && err.message || 'unknown'), 'error'); })
+    .getForm(formId);
+}
+
+function closeEditFormModal(overlayId) {
+  var el = document.getElementById(overlayId);
+  if (el) el.remove();
+}
+
+function saveFormEdit(formId, overlayId) {
+  var locationEvent = document.getElementById('edit-form-location').value.trim();
+  var eventDate = EDIT_CAL_SELECTED || document.getElementById('edit-form-date').value;
+  var remark = document.getElementById('edit-form-remark').value.trim();
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeEditFormModal(overlayId);
+    showToast('Form updated');
+    loadForms();
+  }).updateForm(formId, { locationEvent: locationEvent, eventDate: eventDate, remark: remark });
+}
+
+function activateFormAction(formId) {
+  if (!confirm('Reactivate this form?')) return;
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { showToast(result.error, 'error'); return; }
+    showToast('Form activated');
+    loadForms();
+  }).updateForm(formId, { active: true, deleteRequest: '' });
+}
+
+var EDIT_CAL_DATE = new Date();
+var EDIT_CAL_SELECTED = '';
+
+function toggleEditCalendar() {
+  var popup = document.getElementById('edit-cal-popup');
+  if (popup.classList.contains('hidden')) {
+    EDIT_CAL_DATE = EDIT_CAL_SELECTED ? new Date(EDIT_CAL_SELECTED + 'T00:00:00') : new Date();
+    popup.classList.remove('hidden');
+    renderEditCalendar();
+  } else {
+    popup.classList.add('hidden');
+  }
+}
+
+function renderEditCalendar() {
+  var year = EDIT_CAL_DATE.getFullYear();
+  var month = EDIT_CAL_DATE.getMonth();
+  document.getElementById('edit-cal-month-year').textContent = new Date(year, month).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  var firstDay = new Date(year, month, 1).getDay();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var today = new Date().toISOString().slice(0, 10);
+  var html = '';
+  var day = 1;
+  for (var r = 0; r < 6; r++) {
+    if (day > daysInMonth) break;
+    html += '<tr>';
+    for (var c = 0; c < 7; c++) {
+      if ((r === 0 && c < firstDay) || day > daysInMonth) {
+        html += '<td></td>';
+      } else {
+        var ds = year + '-' + ('0' + (month + 1)).slice(-2) + '-' + ('0' + day).slice(-2);
+        var cls = '';
+        if (ds === today) cls += ' today';
+        if (ds === EDIT_CAL_SELECTED) cls += ' selected';
+        html += '<td class="' + cls + '" onclick="selectEditDate(\'' + ds + '\')">' + day + '</td>';
+        day++;
+      }
+    }
+    html += '</tr>';
+  }
+  document.getElementById('edit-cal-body').innerHTML = html;
+}
+
+function prevEditMonth() { EDIT_CAL_DATE.setMonth(EDIT_CAL_DATE.getMonth() - 1); renderEditCalendar(); }
+function nextEditMonth() { EDIT_CAL_DATE.setMonth(EDIT_CAL_DATE.getMonth() + 1); renderEditCalendar(); }
+
+function selectEditDate(ds) {
+  EDIT_CAL_SELECTED = ds;
+  document.getElementById('edit-form-date').value = ds;
+  document.getElementById('edit-form-date-display').value = formatDisplayDate(ds);
+  document.getElementById('edit-cal-popup').classList.add('hidden');
 }
 
 function suggestDeleteForm(formId) {
@@ -935,7 +1052,10 @@ function selectDate(ds) {
 
 window.addEventListener('click', function (e) {
   if (!e.target.closest('.cal-wrap')) {
-    document.getElementById('cal-popup').classList.add('hidden');
+    var cp = document.getElementById('cal-popup');
+    if (cp) cp.classList.add('hidden');
+    var ecp = document.getElementById('edit-cal-popup');
+    if (ecp) ecp.classList.add('hidden');
   }
 });
 
