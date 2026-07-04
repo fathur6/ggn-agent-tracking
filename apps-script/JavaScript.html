@@ -3,6 +3,16 @@ var MIN_LOADING_MS = 5000;
 var _loadingStartTime = 0;
 var _loadingBarRAF = 0;
 
+function getTheme() { return localStorage.getItem('ugs-theme') || 'dark'; }
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('ugs-theme', t);
+}
+function toggleTheme() {
+  var t = getTheme();
+  setTheme(t === 'dark' ? 'light' : 'dark');
+}
+
 function startLoadingBar() {
   var bar = document.getElementById('loadingBarFill');
   if (!bar) return;
@@ -627,6 +637,8 @@ function renderFormsTimeline(forms, isAdmin) {
   }
 }
 
+var F_FILTER = { search: '', agent: '' };
+
 function filterFormsTimeline() {
   var searchEl = document.getElementById('f-search');
   var agentEl = document.getElementById('f-agent');
@@ -933,6 +945,7 @@ window.addEventListener('hashchange', function () {
 });
 
 window.addEventListener('load', function () {
+  setTheme(getTheme());
   initApp();
 });
 </script>

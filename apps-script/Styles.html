@@ -13,6 +13,27 @@
   --danger: #EF4444;
   --radius: 8px;
   --shadow: 0 2px 8px rgba(0,0,0,0.4);
+  --hover: rgba(20,184,166,0.08);
+  --theme-toggle-bg: #2A2A4A;
+  --theme-toggle-icon: #FBBF24;
+}
+
+[data-theme="light"] {
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface2: #F1F5F9;
+  --border: #E2E8F0;
+  --text: #1E293B;
+  --text2: #64748B;
+  --primary: #4F46E5;
+  --primary-hover: #4338CA;
+  --success: #16A34A;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --hover: rgba(79,70,229,0.06);
+  --theme-toggle-bg: #E2E8F0;
+  --theme-toggle-icon: #F59E0B;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -458,6 +479,37 @@ tr:hover td { background: var(--surface2); }
 .text-small { font-size: 12px; }
 .text-muted { color: var(--text2); }
 .badge-warning { background: rgba(251,191,36,0.2); color: #fbbf24; box-shadow: 0 0 8px rgba(251,191,36,0.2); }
+
+.theme-toggle {
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--theme-toggle-bg); color: var(--theme-toggle-icon); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { border-color: var(--primary); }
+.theme-toggle svg { width: 18px; height: 18px; }
+
+.greeting-popup {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.4s ease;
+}
+.greeting-popup.fade-out { opacity: 0; pointer-events: none; }
+.greeting-content {
+  text-align: center; max-width: 440px; width: 90%; padding: 0 20px;
+  animation: greetingFadeIn 0.6s ease;
+}
+@keyframes greetingFadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.greeting-logo { width: 130px; height: auto; margin: 0 auto 28px; display: block; }
+.greeting-title { font-size: 22px; font-weight: 700; color: #fbbf24; margin-bottom: 10px; }
+.greeting-sub { font-size: 14px; color: #94a3b8; margin-bottom: 28px; line-height: 1.6; }
+.greeting-btn {
+  display: inline-block; padding: 12px 36px; border-radius: 8px; border: none;
+  background: #fbbf24; color: #0f172a; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+.greeting-btn:hover { background: #f59e0b; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(251,191,36,0.3); }
 
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); transition: transform 0.2s; }
