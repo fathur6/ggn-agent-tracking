@@ -175,8 +175,8 @@ function getLead(appId) {
     if (!found) throw new Error('Lead not found');
     
     var headers = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads')[0];
-    var agentCol = headers.indexOf('Agent');
-    if (user.role === 'agent' && agentCol !== -1 && found.rowData[agentCol] !== user.name) {
+    var agentCol = getAgentCol_(headers);
+    if (user.role === 'agent' && agentCol !== -1 && String(found.rowData[agentCol]) !== user.agentId && String(found.rowData[agentCol]) !== user.name) {
       throw new Error('Access denied');
     }
     
@@ -197,7 +197,7 @@ function updateLead(appId, updates) {
     var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
     var refCol = headers.indexOf('Reference');
-    var agentCol = headers.indexOf('Agent');
+    var agentCol = getAgentCol_(headers);
     var statusCol = headers.indexOf('Status');
     var remarksCol = headers.indexOf('Remarks');
     var nameCol = headers.indexOf('Name');
@@ -206,14 +206,14 @@ function updateLead(appId, updates) {
     var nationalityCol = headers.indexOf('Nationality');
     var programmeCol = headers.indexOf('Programme');
     var structureCol = headers.indexOf('Structure');
-    var locationCol = headers.indexOf('Location');
+    var locationCol = getLocationCol_(headers);
 
     if (refCol === -1) throw new Error('Reference column not found');
 
     var rowIndex = -1;
     for (var i = 1; i < data.length; i++) {
       if (data[i][refCol] === appId) {
-        if (user.role === 'agent' && agentCol !== -1 && data[i][agentCol] !== user.name) {
+        if (user.role === 'agent' && agentCol !== -1 && String(data[i][agentCol]) !== user.agentId && String(data[i][agentCol]) !== user.name) {
           throw new Error('Access denied');
         }
         rowIndex = i;
@@ -224,14 +224,14 @@ function updateLead(appId, updates) {
 
     var validStatuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled', 'Deleted'];
     if (updates.status !== undefined) {
-      if (user.role === 'agent' && user.name !== data[rowIndex][agentCol]) {
+      if (user.role === 'agent' && String(data[rowIndex][agentCol]) !== user.agentId && String(data[rowIndex][agentCol]) !== user.name) {
         throw new Error('Access denied');
       }
       if (validStatuses.indexOf(updates.status) === -1) throw new Error('Invalid status: ' + updates.status);
       updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, statusCol, updates.status);
     }
     if (updates.remarks !== undefined && remarksCol !== -1) {
-      if (user.role === 'agent' && user.name !== data[rowIndex][agentCol]) {
+      if (user.role === 'agent' && String(data[rowIndex][agentCol]) !== user.agentId && String(data[rowIndex][agentCol]) !== user.name) {
         throw new Error('Access denied');
       }
       updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', rowIndex, remarksCol, String(updates.remarks));
@@ -331,14 +331,14 @@ function deleteLead(appId) {
     var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
     var refCol = headers.indexOf('Reference');
-    var agentCol = headers.indexOf('Agent');
+    var agentCol = getAgentCol_(headers);
     if (refCol === -1) throw new Error('Reference column not found');
 
     for (var i = 1; i < data.length; i++) {
       if (data[i][refCol] === appId) {
         if (user.role !== 'admin' && agentCol !== -1) {
           var leadAgent = String(data[i][agentCol] || '');
-          if (leadAgent !== user.name) throw new Error('Access denied');
+          if (leadAgent !== user.agentId && leadAgent !== user.name) throw new Error('Access denied');
         }
         var sheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
         sheet.deleteRow(i + 1);
@@ -591,7 +591,7 @@ function fixLeadAgents() {
     if (leadData.length <= 1) return { success: true, fixed: 0, total: 0 };
     var leadHeaders = leadData[0];
     var formIdCol = leadHeaders.indexOf('FormID');
-    var agentCol = leadHeaders.indexOf('Agent');
+    var agentCol = getAgentCol_(leadHeaders);
     var agentIdColLead = leadHeaders.indexOf('AgentID');
 
     Logger.log('Leads headers: ' + JSON.stringify(leadHeaders));
@@ -705,5 +705,17 @@ function syncFormUrls() {
   } catch (e) {
     return { success: false, error: e.message };
   }
+}
+
+function getAgentCol_(headers) {
+  var idx = headers.indexOf('AgentID');
+  if (idx !== -1) return idx;
+  return headers.indexOf('Agent');
+}
+
+function getLocationCol_(headers) {
+  var idx = headers.indexOf('LocationEvent');
+  if (idx !== -1) return idx;
+  return headers.indexOf('Location');
 }
 

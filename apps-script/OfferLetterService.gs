@@ -43,7 +43,7 @@ function generateAndSendOffer_(input) {
     var rowValues = [
       now.toISOString(),
       input.formId || '',
-      input.agentName || 'Unknown',
+      input.agentId || '',
       input.location || '',
       input.remarks || '',
       appId,
@@ -95,7 +95,7 @@ function generateAndSendOffer_(input) {
 
 function ensureLeadsHeaders_(sheet) {
   var LEADS_HEADERS = [
-    'Timestamp', 'FormID', 'Agent', 'Location', 'Remarks',
+    'Timestamp', 'FormID', 'AgentID', 'LocationEvent', 'Remarks',
     'Reference', 'Name', 'Email', 'Passport', 'Nationality',
     'Programme', 'Structure', 'Status',
   ];
@@ -128,6 +128,32 @@ function ensureLeadsHeaders_(sheet) {
     }
   }
   if (isDirty) {
-    throw new Error('Leads sheet has data but mismatched headers. Delete the Leads sheet and re-submit the form to auto-create with correct columns.');
+    var renamed = false;
+    if (existing.length >= 3 && existing[2] === 'Agent') {
+      sheet.getRange(1, 3).setValue('AgentID');
+      renamed = true;
+    }
+    if (existing.length >= 4 && existing[3] === 'Location') {
+      sheet.getRange(1, 4).setValue('LocationEvent');
+      renamed = true;
+    }
+    if (!renamed) {
+      throw new Error('Leads sheet headers mismatch. Run migrateLeadsHeaders() from the editor or delete the Leads sheet and re-submit.');
+    }
+  }
+}
+
+function migrateLeadsHeaders() {
+  try {
+    var sheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var existing = sheet.getDataRange().getValues();
+    if (existing.length === 0) return { success: true, message: 'No data' };
+    var h = existing[0];
+    var renamed = 0;
+    if (h.length >= 3 && h[2] === 'Agent') { sheet.getRange(1, 3).setValue('AgentID'); renamed++; }
+    if (h.length >= 4 && h[3] === 'Location') { sheet.getRange(1, 4).setValue('LocationEvent'); renamed++; }
+    return { success: true, renamed: renamed };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 }
