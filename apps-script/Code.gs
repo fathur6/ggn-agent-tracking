@@ -365,7 +365,8 @@ function restoreLead(appId) {
   }
 }
 
-function getForms() {
+function getForms(filters) {
+  filters = filters || {};
   var step = 'start';
   try {
     Logger.log('[getForms] step=start');
@@ -382,7 +383,9 @@ function getForms() {
     Logger.log('[getForms] step=done forms count=' + forms.length);
 
     if (user.role === 'agent') {
-      forms = forms.filter(function (f) { return f.AgentID === user.agentId; });
+      forms = forms.filter(function (f) { return f.AgentID === user.agentId && f.Active !== 'deleted'; });
+    } else if (!filters.showDeleted) {
+      forms = forms.filter(function (f) { return f.Active !== 'deleted'; });
     }
     var result = { success: true, forms: forms };
     try {
@@ -434,7 +437,7 @@ function ensureFormHeaders_() {
   var sheet = getSheetByName_(CONFIG.FORMS_SHEET_ID, 'Forms');
   var data = sheet.getDataRange().getValues();
   if (data.length === 0 || !data[0] || data[0][0] !== 'FormID') {
-    var headers = ['FormID','FormName','AgentID','AgentName','DefaultFields','EnabledFields','Active','CreatedAt','LocationEvent','Remark','PublicURL','EventDate','DeleteRequest'];
+    var headers = ['FormID','FormName','AgentID','AgentName','DefaultFields','EnabledFields','Active','CreatedAt','LocationEvent','Remark','PublicURL','EventDate'];
     if (data.length > 0) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     } else {
@@ -478,7 +481,6 @@ function createForm(formData) {
       remark,
       publicUrl,
       eventDate,
-      '', // DeleteRequest
     ];
     appendRow_(CONFIG.FORMS_SHEET_ID, 'Forms', row);
     return { success: true, formId: formId, publicUrl: publicUrl };
@@ -502,8 +504,6 @@ function updateForm(formId, updates) {
     var locationEventCol = headers.indexOf('LocationEvent');
     var remarkCol = headers.indexOf('Remark');
     var eventDateCol = headers.indexOf('EventDate');
-    var deleteReqCol = headers.indexOf('DeleteRequest');
-
     if (formIdCol === -1) throw new Error('FormID column not found');
 
     var rowIndex = -1;
@@ -524,8 +524,6 @@ function updateForm(formId, updates) {
     if (updates.locationEvent !== undefined && locationEventCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, locationEventCol, updates.locationEvent);
     if (updates.remark !== undefined && remarkCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, remarkCol, updates.remark);
     if (updates.eventDate !== undefined && eventDateCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, eventDateCol, updates.eventDate);
-    if (updates.deleteRequest !== undefined && deleteReqCol !== -1) updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', rowIndex, deleteReqCol, updates.deleteRequest);
-
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -535,18 +533,25 @@ function updateForm(formId, updates) {
 function deleteForm(formId) {
   try {
     var user = getCurrentUser_();
-    if (user.role !== 'admin') throw new Error('Admin only');
 
     var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
     var headers = data[0];
     var formIdCol = headers.indexOf('FormID');
+    var agentIdCol = headers.indexOf('AgentID');
     var activeCol = headers.indexOf('Active');
     if (formIdCol === -1) throw new Error('FormID column not found');
-    
+
     for (var i = 1; i < data.length; i++) {
       if (data[i][formIdCol] === formId) {
-        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, activeCol, 'false');
-        return { success: true };
+        if (user.role === 'admin') {
+          var sheet = getSheetByName_(CONFIG.FORMS_SHEET_ID, 'Forms');
+          sheet.deleteRow(i + 1);
+          return { success: true };
+        } else {
+          if (agentIdCol !== -1 && data[i][agentIdCol] !== user.agentId) throw new Error('Access denied');
+          updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, activeCol, 'deleted');
+          return { success: true };
+        }
       }
     }
     throw new Error('Form not found');
@@ -575,61 +580,7 @@ function getForm(formId) {
   }
 }
 
-function requestDeleteForm(formId, reason) {
-  try {
-    var user = getCurrentUser_();
-    if (user.role !== 'agent') throw new Error('Only agents can request deletion');
 
-    var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
-    var headers = data[0];
-    var formIdCol = headers.indexOf('FormID');
-    var agentIdCol = headers.indexOf('AgentID');
-    var deleteReqCol = headers.indexOf('DeleteRequest');
-
-    if (formIdCol === -1) throw new Error('FormID column not found');
-    if (deleteReqCol === -1) throw new Error('DeleteRequest column not found');
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][formIdCol] === formId) {
-        if (agentIdCol !== -1 && data[i][agentIdCol] !== user.agentId) throw new Error('Access denied');
-        var reasonText = reason ? String(reason).trim() : 'No reason given';
-        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, deleteReqCol, reasonText + ' | requested by: ' + (user.name || user.agentId));
-        return { success: true };
-      }
-    }
-    throw new Error('Form not found');
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
-
-function approveDeleteForm(formId) {
-  return deleteForm(formId);
-}
-
-function rejectDeleteRequest(formId) {
-  try {
-    var user = getCurrentUser_();
-    if (user.role !== 'admin') throw new Error('Admin only');
-
-    var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
-    var headers = data[0];
-    var formIdCol = headers.indexOf('FormID');
-    var deleteReqCol = headers.indexOf('DeleteRequest');
-
-    if (formIdCol === -1 || deleteReqCol === -1) throw new Error('Required columns not found');
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][formIdCol] === formId) {
-        updateCell_(CONFIG.FORMS_SHEET_ID, 'Forms', i, deleteReqCol, '');
-        return { success: true };
-      }
-    }
-    throw new Error('Form not found');
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
 
 function getDashboard(agentIdFilter) {
   try {

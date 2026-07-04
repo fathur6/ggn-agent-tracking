@@ -510,6 +510,11 @@ function loadForms() {
     done = true;
     el.innerHTML = '<div class="empty">Request timed out (15s).</div>';
   }, 15000);
+  var filters = {};
+  if (CURRENT_USER && CURRENT_USER.role === 'admin') {
+    var sd = document.getElementById('f-show-deleted-forms');
+    filters.showDeleted = sd ? sd.checked : false;
+  }
   google.script.run.withSuccessHandler(function (result) {
     if (done) return;
     done = true;
@@ -530,7 +535,7 @@ function loadForms() {
     var msg = error && error.message ? error.message : String(error || 'unknown');
     el.innerHTML = '<div class="empty">Server error: ' + msg + '</div>';
     showToast('Error loading forms: ' + msg, 'error');
-  }).getForms();
+  }).getForms(filters);
 }
 
 function renderFormsTimeline(forms, isAdmin) {
@@ -547,6 +552,7 @@ function renderFormsTimeline(forms, isAdmin) {
     agents.forEach(function (a) { agentOpts += '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>'; });
     html += '<div class="filter-bar"><input id="f-search" class="input filter-input" placeholder="Search forms..." oninput="filterFormsTimeline()">' +
       '<select id="f-agent" class="select filter-select" onchange="filterFormsTimeline()">' + agentOpts + '</select>' +
+      '<label class="checkbox-label"><input type="checkbox" id="f-show-deleted-forms" onchange="loadForms()"> Show deleted</label>' +
       '<button class="btn btn-sm btn-outline" onclick="syncFormUrls()">Sync URLs</button>' +
       '<button class="btn btn-sm btn-outline" onclick="resetAllFormsAction()">Reset All</button></div>';
   }
@@ -573,14 +579,15 @@ function renderFormsTimeline(forms, isAdmin) {
             '<span class="month-count">' + m.forms.length + '</span>' +
           '</div>' +
           '<div class="forms-table-wrap" id="' + monthId + '" data-month="' + m.key + '" data-agent="' + escapeHtml(agent.agentName) + '">' +
-          '<table class="forms-table"><thead><tr><th>Form Name</th><th>Date</th><th>Location</th><th>Link</th><th style="width:260px">Action</th></tr></thead><tbody>';
+          '<table class="forms-table"><thead><tr><th>Form Name</th><th>Date</th><th>Location</th><th>Link</th><th style="width:300px">Action</th></tr></thead><tbody>';
         m.forms.forEach(function (f) {
-          var isInactive = f.Active !== 'true';
-          var hasPendingRequest = f.DeleteRequest && !isInactive;
-          var rowClass = isInactive ? ' class="inactive-row"' : '';
+          var status = f.Active || '';
+          var isActive = status === 'true';
+          var isDeleted = status === 'deleted';
+          var rowClass = isDeleted ? ' class="inactive-row"' : '';
           var statusBadgeHtml = '';
-          if (hasPendingRequest) statusBadgeHtml = '<span class="badge badge-warning">Pending delete</span>';
-          if (isInactive) statusBadgeHtml = '<span class="badge badge-deleted">Inactive</span>';
+          if (isDeleted) statusBadgeHtml = '<span class="badge badge-deleted">Deleted</span>';
+          else if (!isActive) statusBadgeHtml = '<span class="badge badge-deleted">Inactive</span>';
 
           html += '<tr' + rowClass + ' data-formid="' + escapeHtml(f.FormID) + '" data-agent="' + escapeHtml(agent.agentName) + '" data-month="' + m.key + '">' +
             '<td class="form-name-cell">' + escapeHtml(f.FormName || f.FormID) + '<br>' + statusBadgeHtml + '</td>' +
@@ -592,16 +599,19 @@ function renderFormsTimeline(forms, isAdmin) {
               '<button class="btn btn-sm btn-outline edit-btn" onclick="editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>';
 
           if (isAdmin) {
-            if (hasPendingRequest) {
-              html += '<button class="btn btn-sm btn-primary" onclick="approveDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Approve</button>' +
-                '<button class="btn btn-sm btn-outline" onclick="rejectDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Reject</button>';
-            } else if (isInactive) {
-              html += '<button class="btn btn-sm btn-outline activate-btn" onclick="activateFormAction(\'' + escapeHtml(f.FormID) + '\')">Activate</button>';
+            if (isActive) {
+              html += '<button class="btn btn-sm btn-outline" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
+                '<button class="btn btn-sm btn-outline del-btn" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
             } else {
-              html += '<button class="btn btn-sm btn-outline del-btn" onclick="adminDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+              html += '<button class="btn btn-sm btn-outline activate-btn" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
+                '<button class="btn btn-sm btn-outline del-btn" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
             }
-          } else if (!isInactive) {
-            html += '<button class="btn btn-sm btn-outline" onclick="suggestDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+          } else if (isActive) {
+            html += '<button class="btn btn-sm btn-outline" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
+              '<button class="btn btn-sm btn-outline" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+          } else {
+            html += '<button class="btn btn-sm btn-outline activate-btn" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
+              '<button class="btn btn-sm btn-outline" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
           }
           html += '</td></tr>';
         });
@@ -680,10 +690,11 @@ function showFormDetail(formId) {
 
 function renderFormDetailModal(f) {
   var isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
-  var isOwn = CURRENT_USER && CURRENT_USER.agentId === f.AgentID;
-  var canDelete = isAdmin;
-  var isInactive = f.Active !== 'true';
-  var hasPendingRequest = f.DeleteRequest && !isInactive;
+  var status = f.Active || '';
+  var isActive = status === 'true';
+  var isDeleted = status === 'deleted';
+
+  var statusHtml = isActive ? statusBadge('Active') : (isDeleted ? statusBadge('Deleted') : statusBadge('Inactive'));
 
   var html = '<div class="flex-between mb-4"><div class="card-title">' + escapeHtml(f.FormName || f.FormID) + '</div>' +
     '<button class="btn btn-outline btn-sm" onclick="closeFormDetail()">Close</button></div>' +
@@ -693,15 +704,9 @@ function renderFormDetailModal(f) {
       '<div class="form-group"><label class="label">Location / Event</label><div class="detail-value">' + escapeHtml(f.LocationEvent || '') + '</div></div>' +
       '<div class="form-group"><label class="label">Date</label><div class="detail-value">' + escapeHtml(f.EventDate || '') + '</div></div>' +
       '<div class="form-group"><label class="label">Remark</label><div class="detail-value">' + escapeHtml(f.Remark || '') + '</div></div>' +
-      '<div class="form-group"><label class="label">Status</label><div class="detail-value">' +
-        (isInactive ? statusBadge('Inactive') : (hasPendingRequest ? '<span class="badge badge-warning">Delete Requested</span>' : statusBadge('Active'))) +
-      '</div></div>' +
+      '<div class="form-group"><label class="label">Status</label><div class="detail-value">' + statusHtml + '</div></div>' +
       '<div class="form-group" style="grid-column:1/-1"><label class="label">Public URL</label><div class="detail-value"><input class="input form-detail-url" value="' + escapeHtml(f.PublicURL || '') + '" readonly onclick="this.select()"></div></div>' +
     '</div>';
-
-  if (hasPendingRequest) {
-    html += '<div class="form-group" style="margin-bottom:12px"><label class="label" style="color:#fbbf24">Delete Request</label><div class="detail-value" style="border-color:rgba(251,191,36,0.4)">' + escapeHtml(f.DeleteRequest) + '</div></div>';
-  }
 
   html += '<div class="form-group"><label class="label">Fields Enabled</label>';
   try {
@@ -713,16 +718,24 @@ function renderFormDetailModal(f) {
     html += '<div class="detail-value">' + escapeHtml(f.EnabledFields || '') + '</div>';
   }
   html += '</div>' +
-    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">';
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-sm btn-outline edit-btn" onclick="closeFormDetail();editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>';
   if (isAdmin) {
-    if (hasPendingRequest) {
-      html += '<button class="btn btn-sm btn-primary" onclick="approveDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Approve Delete</button>' +
-        '<button class="btn btn-sm btn-outline" onclick="rejectDeleteAction(\'' + escapeHtml(f.FormID) + '\')">Reject</button>';
-    } else if (!isInactive) {
-      html += '<button class="btn btn-sm btn-outline del-confirm" onclick="adminDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+    if (isActive) {
+      html += '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
+        '<button class="btn btn-sm btn-outline del-confirm" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+    } else {
+      html += '<button class="btn btn-sm btn-outline activate-btn" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
+        '<button class="btn btn-sm btn-outline del-confirm" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
     }
-  } else if (!isInactive && !hasPendingRequest) {
-    html += '<button class="btn btn-sm btn-outline" onclick="suggestDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Suggest Delete</button>';
+  } else {
+    if (isActive) {
+      html += '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+    } else {
+      html += '<button class="btn btn-sm btn-outline activate-btn" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
+    }
   }
   html += '</div>';
 
@@ -795,15 +808,6 @@ function saveFormEdit(formId, overlayId) {
   }).updateForm(formId, { locationEvent: locationEvent, eventDate: eventDate, remark: remark });
 }
 
-function activateFormAction(formId) {
-  if (!confirm('Reactivate this form?')) return;
-  google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
-    showToast('Form activated');
-    loadForms();
-  }).updateForm(formId, { active: true, deleteRequest: '' });
-}
-
 var EDIT_CAL_DATE = new Date();
 var EDIT_CAL_SELECTED = '';
 
@@ -857,42 +861,23 @@ function selectEditDate(ds) {
   document.getElementById('edit-cal-popup').classList.add('hidden');
 }
 
-function suggestDeleteForm(formId) {
-  var reason = prompt('Enter reason for deletion request:');
-  if (reason === null) return;
+function toggleFormActive(formId, active) {
+  var label = active ? 'Reactivate' : 'Deactivate';
+  if (!confirm(label + ' this form?')) return;
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { showToast(result.error, 'error'); return; }
-    showToast('Delete request submitted');
+    showToast(active ? 'Form activated' : 'Form deactivated');
     loadForms();
-  }).requestDeleteForm(formId, reason || '');
+  }).updateForm(formId, { active: active });
 }
 
-function approveDeleteAction(formId) {
-  if (!confirm('Approve deletion of this form?')) return;
+function handleDeleteForm(formId) {
+  var isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
+  var msg = isAdmin ? 'Delete this form permanently?' : 'Delete this form?';
+  if (!confirm(msg)) return;
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast('Form deleted');
-    closeFormDetail();
-    loadForms();
-  }).approveDeleteForm(formId);
-}
-
-function rejectDeleteAction(formId) {
-  if (!confirm('Reject the delete request for this form?')) return;
-  google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
-    showToast('Delete request rejected');
-    closeFormDetail();
-    loadForms();
-  }).rejectDeleteRequest(formId);
-}
-
-function adminDeleteForm(formId) {
-  if (!confirm('Delete this form permanently?')) return;
-  google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
-    showToast('Form deleted');
-    closeFormDetail();
     loadForms();
   }).deleteForm(formId);
 }
