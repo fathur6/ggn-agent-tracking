@@ -219,16 +219,14 @@ function renderLeadsView(leads, isAdmin) {
 
   html += renderFilterBar(leads, isAdmin);
   html += '<div class="card leads-card"><div class="table-wrap"><table><thead><tr>' +
-    '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:52px">Action</th>' +
+    '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:80px">Action</th>' +
     '</tr></thead><tbody>';
 
   if (leads.length === 0) {
     html += '<tr><td colspan="8" class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No leads found</div></td></tr>';
   } else {
     leads.forEach(function (l) {
-      var isDeleted = l.Status === 'Deleted';
-      var rowClass = isDeleted ? ' style="opacity:0.5"' : '';
-      html += '<tr' + rowClass + '>' +
+      html += '<tr>' +
         '<td class="app-id-cell">' + escapeHtml(l.Reference) + '</td>' +
         '<td>' + escapeHtml(l.Name) + '</td>' +
         '<td>' + escapeHtml(l.Nationality) + '</td>' +
@@ -236,15 +234,13 @@ function renderLeadsView(leads, isAdmin) {
         '<td>' + escapeHtml(l.Programme) + '</td>' +
         '<td>' + statusBadge(l.Status) + '</td>' +
         '<td>' + formatDate(l.Timestamp) + '</td>' +
-        '<td class="action-cell">' +
-          '<button class="action-menu-trigger" onclick="toggleActionMenu(\'' + escapeHtml(l.Reference) + '\')">⋮</button>' +
-          '<div id="menu-' + escapeHtml(l.Reference) + '" class="action-menu" style="display:none">' +
-            '<div class="action-menu-item" onclick="viewLead(\'' + escapeHtml(l.Reference) + '\')">View</div>' +
-            '<div class="action-menu-item" onclick="editLeadModal(\'' + escapeHtml(l.Reference) + '\')">Edit</div>' +
-            (isAdmin && isDeleted
-              ? '<div class="action-menu-item" onclick="restoreLeadAction(\'' + escapeHtml(l.Reference) + '\')">Restore</div>'
-              : (isAdmin ? '<div class="action-menu-item danger" onclick="deleteLeadAction(\'' + escapeHtml(l.Reference) + '\')">Delete</div>' : '')) +
-          '</div>' +
+        '<td class="action-cell" style="white-space:nowrap">' +
+          '<button class="btn-icon edit-btn-icon" onclick="editLeadModal(\'' + escapeHtml(l.Reference) + '\')" title="Edit">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
+          '</button>' +
+          '<button class="btn-icon del-btn-icon" onclick="deleteLeadAction(\'' + escapeHtml(l.Reference) + '\')" title="Delete">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>' +
+          '</button>' +
         '</td>' +
         '</tr>';
     });
@@ -254,7 +250,7 @@ function renderLeadsView(leads, isAdmin) {
 }
 
 function renderFilterBar(leads, isAdmin) {
-  var statuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled', 'Deleted'];
+  var statuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled'];
   var statusOpts = '<option value="">All Statuses</option>';
   statuses.forEach(function (s) { statusOpts += '<option value="' + s + '" ' + (filterState.status === s ? 'selected' : '') + '>' + s + '</option>'; });
 
@@ -269,73 +265,28 @@ function renderFilterBar(leads, isAdmin) {
     (isAdmin ? '<select id="f-agent" class="select filter-select">' + agentOpts + '</select>' : '') +
     '<input type="date" id="f-date-from" class="input filter-input" value="' + (filterState.dateFrom || '') + '" placeholder="From">' +
     '<input type="date" id="f-date-to" class="input filter-input" value="' + (filterState.dateTo || '') + '" placeholder="To">' +
-    (isAdmin ? '<label class="checkbox-label"><input type="checkbox" id="f-show-deleted" ' + (filterState.showDeleted ? 'checked' : '') + ' onchange="applyFilters()"> Show deleted</label>' : '') +
     '<button class="btn btn-sm btn-primary" onclick="applyFilters()">Apply</button>' +
     '<button class="btn btn-sm btn-outline" onclick="clearFilters()">Clear</button>' +
     '</div>';
   return html;
 }
 
-var filterState = { status: '', agent: '', dateFrom: '', dateTo: '', showDeleted: false };
+var filterState = { status: '', agent: '', dateFrom: '', dateTo: '' };
 
 function applyFilters() {
   filterState.status = document.getElementById('f-status') ? document.getElementById('f-status').value : '';
   filterState.agent = document.getElementById('f-agent') ? document.getElementById('f-agent').value : '';
   filterState.dateFrom = document.getElementById('f-date-from') ? document.getElementById('f-date-from').value : '';
   filterState.dateTo = document.getElementById('f-date-to') ? document.getElementById('f-date-to').value : '';
-  var showDeletedEl = document.getElementById('f-show-deleted');
-  filterState.showDeleted = showDeletedEl ? showDeletedEl.checked : false;
   loadLeads(filterState);
 }
 
 function clearFilters() {
-  filterState = { status: '', agent: '', dateFrom: '', dateTo: '', showDeleted: false };
+  filterState = { status: '', agent: '', dateFrom: '', dateTo: '' };
   loadLeads();
 }
 
-function toggleActionMenu(appId) {
-  var menu = document.getElementById('menu-' + appId);
-  var allMenus = document.querySelectorAll('.action-menu');
-  allMenus.forEach(function (m) { if (m !== menu) m.style.display = 'none'; });
-  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-  if (menu.style.display === 'block') {
-    setTimeout(function () {
-      document.addEventListener('click', function handler(e) {
-        if (!menu.contains(e.target) && e.target.className.indexOf('action-menu-trigger') === -1) {
-          menu.style.display = 'none';
-          document.removeEventListener('click', handler);
-        }
-      });
-    }, 10);
-  }
-}
-
-function viewLead(appId) {
-  closeAllMenus();
-  google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { alert(result.error); return; }
-    var l = result.lead;
-    var html = '<div class="modal-overlay" style="display:flex" onclick="closeLeadModal(event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
-      '<div class="flex-between mb-4"><div class="card-title">Lead Detail</div><button class="btn btn-outline btn-sm" onclick="closeLeadModal()">Close</button></div>' +
-      '<div class="form-group"><label class="label">App ID</label><div class="detail-value">' + escapeHtml(l.Reference) + '</div></div>' +
-      '<div class="form-group"><label class="label">Name</label><div class="detail-value">' + escapeHtml(l.Name) + '</div></div>' +
-      '<div class="form-group"><label class="label">Email</label><div class="detail-value">' + escapeHtml(l.Email) + '</div></div>' +
-      '<div class="form-group"><label class="label">Passport</label><div class="detail-value">' + escapeHtml(l.Passport) + '</div></div>' +
-      '<div class="form-group"><label class="label">Nationality</label><div class="detail-value">' + escapeHtml(l.Nationality) + '</div></div>' +
-      '<div class="form-group"><label class="label">Programme</label><div class="detail-value">' + escapeHtml(l.Programme) + '</div></div>' +
-      '<div class="form-group"><label class="label">Structure</label><div class="detail-value">' + escapeHtml(l.Structure) + '</div></div>' +
-      '<div class="form-group"><label class="label">Agent</label><div class="detail-value">' + escapeHtml(l.Agent) + '</div></div>' +
-      '<div class="form-group"><label class="label">Location</label><div class="detail-value">' + escapeHtml(l.Location) + '</div></div>' +
-      '<div class="form-group"><label class="label">Remarks</label><div class="detail-value">' + escapeHtml(l.Remarks) + '</div></div>' +
-      '<div class="form-group"><label class="label">Status</label><div class="detail-value">' + statusBadge(l.Status) + '</div></div>' +
-      '<div class="form-group"><label class="label">Date</label><div class="detail-value">' + formatDate(l.Timestamp) + '</div></div>' +
-      '</div></div>';
-    document.body.insertAdjacentHTML('beforeend', html);
-  }).getLead(appId);
-}
-
 function editLeadModal(appId) {
-  closeAllMenus();
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { alert(result.error); return; }
     var l = result.lead;
@@ -387,24 +338,12 @@ function saveLeadEdit(appId) {
 }
 
 function deleteLeadAction(appId) {
-  if (!confirm('Delete this lead? This can be restored later.')) return;
+  if (!confirm('Delete this lead permanently? This cannot be undone.')) return;
   google.script.run.withSuccessHandler(function (r) {
     if (!r.success) { alert(r.error); return; }
+    showToast('Lead permanently deleted');
     applyFilters();
   }).deleteLead(appId);
-}
-
-function restoreLeadAction(appId) {
-  if (!confirm('Restore this lead?')) return;
-  google.script.run.withSuccessHandler(function (r) {
-    if (!r.success) { alert(r.error); return; }
-    applyFilters();
-  }).restoreLead(appId);
-}
-
-function closeAllMenus() {
-  var menus = document.querySelectorAll('.action-menu');
-  menus.forEach(function (m) { m.style.display = 'none'; });
 }
 
 function closeLeadModal(e) {

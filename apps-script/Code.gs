@@ -327,44 +327,21 @@ function deleteLead(appId) {
   lock.waitLock(5000);
   try {
     var user = getCurrentUser_();
-    if (user.role !== 'admin') throw new Error('Admin only');
 
     var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
     var refCol = headers.indexOf('Reference');
-    var statusCol = headers.indexOf('Status');
-    if (refCol === -1 || statusCol === -1) throw new Error('Required columns not found');
+    var agentCol = headers.indexOf('Agent');
+    if (refCol === -1) throw new Error('Reference column not found');
 
     for (var i = 1; i < data.length; i++) {
       if (data[i][refCol] === appId) {
-        updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', i, statusCol, 'Deleted');
-        return { success: true };
-      }
-    }
-    throw new Error('Lead not found');
-  } catch (e) {
-    return { success: false, error: e.message };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function restoreLead(appId) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-  try {
-    var user = getCurrentUser_();
-    if (user.role !== 'admin') throw new Error('Admin only');
-
-    var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
-    var headers = data[0];
-    var refCol = headers.indexOf('Reference');
-    var statusCol = headers.indexOf('Status');
-    if (refCol === -1 || statusCol === -1) throw new Error('Required columns not found');
-
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][refCol] === appId) {
-        updateCell_(CONFIG.LEADS_SHEET_ID, 'Leads', i, statusCol, 'New');
+        if (user.role !== 'admin' && agentCol !== -1) {
+          var leadAgent = String(data[i][agentCol] || '');
+          if (leadAgent !== user.name) throw new Error('Access denied');
+        }
+        var sheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
+        sheet.deleteRow(i + 1);
         return { success: true };
       }
     }
