@@ -111,8 +111,15 @@ function deleteAgent(agentId) {
     
     for (var i = 1; i < data.length; i++) {
       if (data[i][agentIdCol] === agentId) {
-        updateCell_(CONFIG.AGENTS_SHEET_ID, 'Agents', i, statusCol, 'inactive');
-        return { success: true };
+        var currentStatus = (data[i][statusCol] || '').toLowerCase();
+        if (currentStatus === 'inactive') {
+          var sheet = getSheetByName_(CONFIG.AGENTS_SHEET_ID, 'Agents');
+          sheet.deleteRow(i + 1);
+          return { success: true, action: 'permanent' };
+        } else {
+          updateCell_(CONFIG.AGENTS_SHEET_ID, 'Agents', i, statusCol, 'inactive');
+          return { success: true, action: 'deactivated' };
+        }
       }
     }
     throw new Error('Agent not found');
@@ -608,33 +615,71 @@ function fixLeadAgents() {
     var leadHeaders = leadData[0];
     var formIdCol = leadHeaders.indexOf('FormID');
     var agentCol = leadHeaders.indexOf('Agent');
+    var agentIdColLead = leadHeaders.indexOf('AgentID');
+
+    Logger.log('Leads headers: ' + JSON.stringify(leadHeaders));
+    Logger.log('formIdCol=' + formIdCol + ' agentCol=' + agentCol + ' agentIdColLead=' + agentIdColLead);
+
     if (formIdCol === -1 || agentCol === -1) throw new Error('Required columns not found');
 
     var formData = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
     var formHeaders = formData[0];
     var formIdIdx = formHeaders.indexOf('FormID');
     var formAgentCol = formHeaders.indexOf('AgentName');
-    if (formIdIdx === -1 || formAgentCol === -1) { formIdIdx = -1; }
+    Logger.log('Forms headers: ' + JSON.stringify(formHeaders));
+    Logger.log('formIdIdx=' + formIdIdx + ' formAgentCol=' + formAgentCol);
 
     var fixed = 0;
     for (var i = 1; i < leadData.length; i++) {
       var currentAgent = String(leadData[i][agentCol] || '');
       var leadFormId = String(leadData[i][formIdCol] || '');
-      if (currentAgent === 'Unknown' && leadFormId && formIdIdx !== -1) {
+      var leadAgentId = agentIdColLead !== -1 ? String(leadData[i][agentIdColLead] || '') : '';
+      Logger.log('Lead ' + i + ': agent="' + currentAgent + '" formId="' + leadFormId + '" agentId="' + leadAgentId + '"');
+
+      if (currentAgent !== 'Unknown') continue;
+
+      var correctName = '';
+
+      // Strategy 1: match by FormID
+      if (leadFormId && formIdIdx !== -1 && formAgentCol !== -1) {
         for (var j = 1; j < formData.length; j++) {
           if (String(formData[j][formIdIdx]) === leadFormId) {
-            var correctName = formData[j][formAgentCol] || '';
-            if (correctName && correctName !== 'Unknown') {
-              leadSheet.getRange(i + 1, agentCol + 1).setValue(correctName);
-              fixed++;
-            }
+            correctName = formData[j][formAgentCol] || '';
+            Logger.log('  Found form ' + leadFormId + ' with AgentName="' + correctName + '"');
             break;
           }
         }
       }
+
+      // Strategy 2: match by AgentID in Agents sheet
+      if (!correctName && leadAgentId) {
+        var agentData = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
+        var agentHeaders = agentData[0];
+        var agIdCol = agentHeaders.indexOf('AgentID');
+        var agNameCol = agentHeaders.indexOf('Name');
+        if (agIdCol !== -1 && agNameCol !== -1) {
+          for (var k = 1; k < agentData.length; k++) {
+            if (String(agentData[k][agIdCol]) === leadAgentId) {
+              correctName = agentData[k][agNameCol] || '';
+              Logger.log('  Found agent ' + leadAgentId + ' with Name="' + correctName + '"');
+              break;
+            }
+          }
+        }
+      }
+
+      if (correctName && correctName !== 'Unknown') {
+        leadSheet.getRange(i + 1, agentCol + 1).setValue(correctName);
+        fixed++;
+        Logger.log('  UPDATED to "' + correctName + '"');
+      } else {
+        Logger.log('  NO MATCH found');
+      }
     }
+    Logger.log('Total fixed: ' + fixed);
     return { success: true, fixed: fixed, total: leadData.length - 1 };
   } catch (e) {
+    Logger.log('ERROR: ' + e.message + ' ' + e.stack);
     return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
