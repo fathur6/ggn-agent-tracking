@@ -258,32 +258,36 @@ function submitLead(leadData) {
 
     var agentName = 'Unknown';
     var agentEmail = '';
-    if (leadData.agentId) {
-      var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
-      var headers = data[0];
-      var agentIdCol = headers.indexOf('AgentID');
-      var agentNameCol = headers.indexOf('Name');
-      var agentEmailCol = headers.indexOf('Email');
-      if (agentIdCol !== -1 && agentNameCol !== -1) {
-        for (var i = 1; i < data.length; i++) {
-          if (data[i][agentIdCol] === leadData.agentId) {
-            agentName = data[i][agentNameCol] || 'Unknown';
-            if (agentEmailCol !== -1) agentEmail = data[i][agentEmailCol] || '';
-            break;
-          }
-        }
-      }
-    }
-
+    var agentId = leadData.agentId || '';
     var location = '';
     var remarks = '';
+
     if (leadData.formId) {
       var forms = getSheetObjects_(CONFIG.FORMS_SHEET_ID, 'Forms');
       for (var j = 0; j < forms.length; j++) {
         if (forms[j].FormID === leadData.formId) {
           location = forms[j].LocationEvent || '';
           remarks = forms[j].Remark || '';
+          agentName = forms[j].AgentName || agentName;
+          if (forms[j].AgentID) agentId = forms[j].AgentID;
           break;
+        }
+      }
+    }
+
+    if (agentId && agentName === 'Unknown') {
+      var sheetData = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
+      var sheetHeaders = sheetData[0];
+      var agentIdCol = sheetHeaders.indexOf('AgentID');
+      var agentNameCol = sheetHeaders.indexOf('Name');
+      var agentEmailCol = sheetHeaders.indexOf('Email');
+      if (agentIdCol !== -1 && agentNameCol !== -1) {
+        for (var i = 1; i < sheetData.length; i++) {
+          if (sheetData[i][agentIdCol] === agentId) {
+            agentName = sheetData[i][agentNameCol] || 'Unknown';
+            if (agentEmailCol !== -1) agentEmail = sheetData[i][agentEmailCol] || '';
+            break;
+          }
         }
       }
     }
@@ -295,7 +299,7 @@ function submitLead(leadData) {
       nationality: leadData.nationality || '',
       structure: leadData.structure || '',
       programme: leadData.programme || '',
-      agentId: leadData.agentId || '',
+      agentId: agentId,
       agentName: agentName,
       agentEmail: agentEmail,
       formId: leadData.formId || '',
@@ -588,6 +592,52 @@ function getDashboard(agentIdFilter) {
     return { success: true, summary: summary };
   } catch (e) {
     return { success: false, error: e.message };
+  }
+}
+
+function fixLeadAgents() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var leadSheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var leadData = leadSheet.getDataRange().getValues();
+    if (leadData.length <= 1) return { success: true, fixed: 0, total: 0 };
+    var leadHeaders = leadData[0];
+    var formIdCol = leadHeaders.indexOf('FormID');
+    var agentCol = leadHeaders.indexOf('Agent');
+    if (formIdCol === -1 || agentCol === -1) throw new Error('Required columns not found');
+
+    var formData = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
+    var formHeaders = formData[0];
+    var formIdIdx = formHeaders.indexOf('FormID');
+    var formAgentCol = formHeaders.indexOf('AgentName');
+    if (formIdIdx === -1 || formAgentCol === -1) { formIdIdx = -1; }
+
+    var fixed = 0;
+    for (var i = 1; i < leadData.length; i++) {
+      var currentAgent = String(leadData[i][agentCol] || '');
+      var leadFormId = String(leadData[i][formIdCol] || '');
+      if (currentAgent === 'Unknown' && leadFormId && formIdIdx !== -1) {
+        for (var j = 1; j < formData.length; j++) {
+          if (String(formData[j][formIdIdx]) === leadFormId) {
+            var correctName = formData[j][formAgentCol] || '';
+            if (correctName && correctName !== 'Unknown') {
+              leadSheet.getRange(i + 1, agentCol + 1).setValue(correctName);
+              fixed++;
+            }
+            break;
+          }
+        }
+      }
+    }
+    return { success: true, fixed: fixed, total: leadData.length - 1 };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
