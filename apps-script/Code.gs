@@ -803,11 +803,23 @@ function cronCheckEmgsStatus_() {
     try {
       var getResp = UrlFetchApp.fetch(EMGS_FORM_URL, {
         muteHttpExceptions: true,
-        followRedirects: true,
+        followRedirects: false,
       });
       var formHtml = getResp.getContentText();
 
-      var formKeyMatch = formHtml.match(/name="form_key"\s+value="([^"]+)"/i);
+      var cookies = '';
+      var respHeaders = getResp.getAllHeaders();
+      if (respHeaders['Set-Cookie']) {
+        cookies = respHeaders['Set-Cookie'];
+      } else if (respHeaders['set-cookie']) {
+        cookies = respHeaders['set-cookie'];
+      }
+      if (cookies && cookies.indexOf(';') > 0) {
+        cookies = cookies.split(';')[0];
+      }
+
+      var formKeyMatch = formHtml.match(/name="form_key"\s+type="hidden"\s+value="([^"]+)"/i);
+      if (!formKeyMatch) formKeyMatch = formHtml.match(/name="form_key"\s+value="([^"]+)"/i);
       if (!formKeyMatch) continue;
 
       var formKey = formKeyMatch[1];
@@ -816,36 +828,37 @@ function cronCheckEmgsStatus_() {
         '&nationality=' + encodeURIComponent(countryCode) +
         '&agreement=1';
 
+      var headers = { 'Cookie': cookies };
       var postResp = UrlFetchApp.fetch(EMGS_POST_URL, {
         method: 'post',
         payload: postPayload,
         contentType: 'application/x-www-form-urlencoded',
+        headers: headers,
         muteHttpExceptions: true,
         followRedirects: true,
       });
-      var resultHtml = postResp.getContentText();
+      var resultHtml = postResp.getContentText().replace(/\s+/g, ' ');
 
       var anyUpdate = false;
 
-      var pctMatch = resultHtml.match(/<h2>(\d+)%<\/h2>/i);
+      var pctMatch = resultHtml.match(/<h2>\s*(\d+)\s*%\s*<\/h2>/i);
       if (pctMatch) {
         var pct = parseInt(pctMatch[1], 10);
         updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, progressCol, pct / 100);
         anyUpdate = true;
       }
 
-      var statusMatch = resultHtml.match(/Application\s*Status[:\s]*([^<]{2,80}?)(?:<|\.)/i);
-      if (!statusMatch) statusMatch = resultHtml.match(/Application\s*Status[:\s]*([^\n]{2,80})/i);
+      var statusMatch = resultHtml.match(/Application Status\s*<\/label>\s*:\s*([^<]+)/i);
       if (statusMatch) {
         var s = statusMatch[1].trim();
-        if (s.length > 3) {
+        if (s.length > 0) {
           updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, s);
           anyUpdate = true;
         }
       }
 
       if (appNoCol !== -1) {
-        var appNoMatch = resultHtml.match(/Application\s*(?:No|Number)[.:\s]*([0-9]+)/i);
+        var appNoMatch = resultHtml.match(/Application Number\s*<\/label>\s*:\s*([0-9]+)/i);
         if (appNoMatch) {
           updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, appNoCol, appNoMatch[1].trim());
           anyUpdate = true;
