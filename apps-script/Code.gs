@@ -848,9 +848,9 @@ function cronCheckEmgsStatus_() {
         anyUpdate = true;
       }
 
-      var statusMatch = resultHtml.match(/Application Status\s*<\/label>\s*:\s*([^<]+)/i);
+      var statusMatch = resultHtml.match(/Application Status\s*<\/label>[^:]*:(?:&nbsp;|\s)*([^<]+)/i);
       if (statusMatch) {
-        var s = statusMatch[1].trim();
+        var s = statusMatch[1].replace(/&nbsp;/g, ' ').trim();
         if (s.length > 0) {
           updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, s);
           anyUpdate = true;
@@ -858,7 +858,7 @@ function cronCheckEmgsStatus_() {
       }
 
       if (appNoCol !== -1) {
-        var appNoMatch = resultHtml.match(/Application Number\s*<\/label>\s*:\s*([0-9]+)/i);
+        var appNoMatch = resultHtml.match(/Application Number\s*<\/label>[^:]*:(?:&nbsp;|\s)*([0-9]+)/i);
         if (appNoMatch) {
           updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, appNoCol, appNoMatch[1].trim());
           anyUpdate = true;
