@@ -825,26 +825,34 @@ function cronCheckEmgsStatus_() {
       });
       var resultHtml = postResp.getContentText();
 
+      var anyUpdate = false;
+
       var pctMatch = resultHtml.match(/<h2>(\d+)%<\/h2>/i);
       if (pctMatch) {
         var pct = parseInt(pctMatch[1], 10);
-        var decimalPct = pct / 100;
-        updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, progressCol, decimalPct);
-
-        var statusMatch = resultHtml.match(/Application Status[:\s]*<\/[^>]+>[:\s]*([^<.]+)/i);
-        if (statusMatch) {
-          var emgsStatus = statusMatch[1].trim();
-          updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, emgsStatus);
-        }
-
-        if (appNoCol !== -1) {
-          var appNoMatch = resultHtml.match(/Application No[.:\s]*<\/[^>]+>[:\s]*([^<.]+)/i);
-          if (appNoMatch) {
-            updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, appNoCol, appNoMatch[1].trim());
-          }
-        }
-        updated++;
+        updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, progressCol, pct / 100);
+        anyUpdate = true;
       }
+
+      var statusMatch = resultHtml.match(/Application\s*Status[:\s]*([^<]{2,80}?)(?:<|\.)/i);
+      if (!statusMatch) statusMatch = resultHtml.match(/Application\s*Status[:\s]*([^\n]{2,80})/i);
+      if (statusMatch) {
+        var s = statusMatch[1].trim();
+        if (s.length > 3) {
+          updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, s);
+          anyUpdate = true;
+        }
+      }
+
+      if (appNoCol !== -1) {
+        var appNoMatch = resultHtml.match(/Application\s*(?:No|Number)[.:\s]*([0-9]+)/i);
+        if (appNoMatch) {
+          updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, appNoCol, appNoMatch[1].trim());
+          anyUpdate = true;
+        }
+      }
+
+      if (anyUpdate) updated++;
     } catch (reqErr) {
       Logger.log('EMGS check failed for ' + passport + ': ' + reqErr);
     }
