@@ -131,10 +131,30 @@ function deleteAgent(agentId) {
   }
 }
 
+function getAgentNameMap_() {
+  var map = {};
+  var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
+  if (data.length <= 1) return map;
+  var headers = data[0];
+  var idCol = headers.indexOf('AgentID');
+  var nameCol = headers.indexOf('Name');
+  if (idCol === -1 || nameCol === -1) return map;
+  for (var i = 1; i < data.length; i++) {
+    map[data[i][idCol]] = data[i][nameCol];
+  }
+  return map;
+}
+
 function getLeads(filters) {
   try {
     var user = getCurrentUser_();
     var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
+    var agentNameMap = getAgentNameMap_();
+
+    leads.forEach(function (l) {
+      var agentId = getLeadAgent_(l);
+      l.AgentName = agentNameMap[agentId] || agentId;
+    });
 
     if (user.role === 'agent') {
       leads = leads.filter(function (l) {
@@ -153,7 +173,7 @@ function getLeads(filters) {
         leads = leads.filter(function (l) { return l.Status === filters.status; });
       }
       if (filters.agent && user.role === 'admin') {
-        leads = leads.filter(function (l) { return getLeadAgent_(l) === filters.agent; });
+        leads = leads.filter(function (l) { return l.AgentName === filters.agent; });
       }
       if (filters.dateFrom) {
         leads = leads.filter(function (l) {

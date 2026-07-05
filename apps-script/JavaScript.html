@@ -1,5 +1,5 @@
 <script>
-var MIN_LOADING_MS = 5000;
+var MIN_LOADING_MS = 1500;
 var _loadingStartTime = 0;
 var _loadingBarRAF = 0;
 
@@ -255,7 +255,7 @@ function renderFilterBar(leads, isAdmin) {
 
   var agents = [];
   var seen = {};
-  leads.forEach(function (l) { if (!seen[l.AgentID]) { seen[l.AgentID] = true; agents.push(l.AgentID); } });
+  leads.forEach(function (l) { var n = l.AgentName || l.AgentID; if (!seen[n]) { seen[n] = true; agents.push(n); } });
   var agentOpts = '<option value="">All Agents</option>';
   agents.forEach(function (a) { agentOpts += '<option value="' + escapeHtml(a) + '" ' + (filterState.agent === a ? 'selected' : '') + '>' + escapeHtml(a) + '</option>'; });
 
@@ -699,13 +699,9 @@ function renderFormsTimeline(forms, isAdmin) {
           '<div class="forms-table-wrap" id="' + monthId + '" data-month="' + m.key + '" data-agent="' + escapeHtml(agent.agentName) + '">' +
           '<table class="forms-table"><thead><tr><th>Form Name</th><th>Date</th><th>Location</th><th>Link</th><th style="width:300px">Action</th></tr></thead><tbody>';
         m.forms.forEach(function (f) {
-          var status = f.Active || '';
-          var isActive = status === 'true';
-          var isDeleted = status === 'deleted';
+          var isDeleted = f.Active === 'deleted';
           var rowClass = isDeleted ? ' class="inactive-row"' : '';
-          var statusBadgeHtml = '';
-          if (isDeleted) statusBadgeHtml = '<span class="badge badge-deleted">Deleted</span>';
-          else if (!isActive) statusBadgeHtml = '<span class="badge badge-deleted">Inactive</span>';
+          var statusBadgeHtml = isDeleted ? '<span class="badge badge-deleted">Deleted</span>' : '';
 
           html += '<tr' + rowClass + ' data-formid="' + escapeHtml(f.FormID) + '" data-agent="' + escapeHtml(agent.agentName) + '" data-month="' + m.key + '">' +
             '<td class="form-name-cell">' + escapeHtml(f.FormName || f.FormID) + '<br>' + statusBadgeHtml + '</td>' +
@@ -714,24 +710,9 @@ function renderFormsTimeline(forms, isAdmin) {
             '<td class="form-link-cell"><a href="' + escapeHtml(f.PublicURL || '#') + '" target="_blank">Open</a></td>' +
             '<td class="form-action-cell">' +
               '<button class="btn btn-sm btn-ghost" onclick="showFormDetail(\'' + escapeHtml(f.FormID) + '\')">View</button>' +
-              '<button class="btn btn-sm btn-outline edit-btn" onclick="editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>';
-
-          if (isAdmin) {
-            if (isActive) {
-              html += '<button class="btn btn-sm btn-outline" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
-                '<button class="btn btn-sm btn-outline del-btn" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-            } else {
-              html += '<button class="btn btn-sm btn-outline activate-btn" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
-                '<button class="btn btn-sm btn-outline del-btn" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-            }
-          } else if (isActive) {
-            html += '<button class="btn btn-sm btn-outline" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
-              '<button class="btn btn-sm btn-outline" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-          } else {
-            html += '<button class="btn btn-sm btn-outline activate-btn" onclick="toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
-              '<button class="btn btn-sm btn-outline" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-          }
-          html += '</td></tr>';
+              '<button class="btn btn-sm btn-outline edit-btn" onclick="editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>' +
+              '<button class="btn btn-sm btn-outline del-btn" onclick="handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>' +
+            '</td></tr>';
         });
         html += '</tbody></table></div></div>';
       });
@@ -807,12 +788,8 @@ function showFormDetail(formId) {
 }
 
 function renderFormDetailModal(f) {
-  var isAdmin = CURRENT_USER && CURRENT_USER.role === 'admin';
-  var status = f.Active || '';
-  var isActive = status === 'true';
-  var isDeleted = status === 'deleted';
-
-  var statusHtml = isActive ? statusBadge('Active') : (isDeleted ? statusBadge('Deleted') : statusBadge('Inactive'));
+  var isDeleted = f.Active === 'deleted';
+  var statusHtml = isDeleted ? statusBadge('Deleted') : statusBadge('Active');
 
   var html = '<div class="flex-between mb-4"><div class="card-title">' + escapeHtml(f.FormName || f.FormID) + '</div>' +
     '<button class="btn btn-outline btn-sm" onclick="closeFormDetail()">Close</button></div>' +
@@ -837,25 +814,9 @@ function renderFormDetailModal(f) {
   }
   html += '</div>' +
     '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
-    '<button class="btn btn-sm btn-outline edit-btn" onclick="closeFormDetail();editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>';
-  if (isAdmin) {
-    if (isActive) {
-      html += '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
-        '<button class="btn btn-sm btn-outline del-confirm" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-    } else {
-      html += '<button class="btn btn-sm btn-outline activate-btn" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
-        '<button class="btn btn-sm btn-outline del-confirm" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-    }
-  } else {
-    if (isActive) {
-      html += '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', false)">Deactivate</button>' +
-        '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-    } else {
-      html += '<button class="btn btn-sm btn-outline activate-btn" onclick="closeFormDetail();toggleFormActive(\'' + escapeHtml(f.FormID) + '\', true)">Activate</button>' +
-        '<button class="btn btn-sm btn-outline" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>';
-    }
-  }
-  html += '</div>';
+    '<button class="btn btn-sm btn-outline edit-btn" onclick="closeFormDetail();editFormModal(\'' + escapeHtml(f.FormID) + '\')">Edit</button>' +
+    '<button class="btn btn-sm btn-outline del-confirm" onclick="closeFormDetail();handleDeleteForm(\'' + escapeHtml(f.FormID) + '\')">Delete</button>' +
+    '</div>';
 
   var overlay = document.getElementById('form-detail-overlay');
   var modal = document.getElementById('form-detail-modal');
