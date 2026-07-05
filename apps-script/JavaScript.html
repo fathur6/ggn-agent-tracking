@@ -3,7 +3,7 @@ var MIN_LOADING_MS = 5000;
 var _loadingStartTime = 0;
 var _loadingBarRAF = 0;
 
-function getTheme() { return localStorage.getItem('ugs-theme') || 'dark'; }
+function getTheme() { return localStorage.getItem('ugs-theme') || 'light'; }
 function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('ugs-theme', t);
@@ -154,15 +154,15 @@ function loadDashboard() {
     if (!result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
     var s = result.summary;
     var html = '<div class="stat-grid stat-grid-5">' +
-      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">Total Leads</div><div class="stat-value primary">' + s.totalLeads + '</div></div>' +
-      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">COL Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
-      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Agreed</div><div class="stat-value success">' + s.accepted + '</div></div>' +
-      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Enrolled</div><div class="stat-value success">' + s.enrolled + '</div></div>' +
-      '<div class="stat-card stat-card-glow-warning"><div class="stat-label">Conversion</div><div class="stat-value warning">' + s.conversionRate + '%</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">' + s.totalLeads + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">COL Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Agreed</div><div class="stat-value">' + s.accepted + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Enrolled</div><div class="stat-value">' + s.enrolled + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Conversion</div><div class="stat-value">' + s.conversionRate + '%</div></div>' +
     '</div>';
 
     var byAgentRows = s.byAgent || [];
-    html += '<div class="card card-accent-teal"><div class="card-header-gradient">Activity by Agent</div>';
+    html += '<div class="card"><div class="card-title">Activity by Agent</div>';
     if (byAgentRows.length === 0) {
       html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)"></div><div class="empty-label">No agent activity yet</div></div>';
     } else {
@@ -175,7 +175,7 @@ function loadDashboard() {
     }
     html += '</div>';
 
-    html += '<div class="grid-2"><div class="card card-accent-teal"><div class="card-title">Recent Activity</div>';
+    html += '<div class="grid-2"><div class="card"><div class="card-title">Recent Activity</div>';
     var ra = s.recentActivity || [];
     if (ra.length === 0) {
       html += '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No recent activity</div></div>';
@@ -186,7 +186,7 @@ function loadDashboard() {
       });
       html += '</tbody></table>';
     }
-    html += '</div><div class="card card-accent-teal"><div class="card-header-gradient">By Status</div>';
+    html += '</div><div class="card"><div class="card-title">By Status</div>';
     var byStatus = s.byStatus || {};
     if (Object.keys(byStatus).length === 0) {
       html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)"></div><div class="empty-label">No data</div></div>';
@@ -215,11 +215,10 @@ function loadLeads(filters) {
 
 function renderLeadsView(leads, isAdmin) {
   var el = document.getElementById('leads-content');
-  var titleClass = isAdmin ? 'card-title leads-title' : 'card-title';
-  var html = '<div class="flex-between mb-4"><div class="' + titleClass + '">Leads (' + leads.length + ')</div></div>';
+  var html = '<div class="flex-between mb-4"><div class="card-title">Leads (' + leads.length + ')</div></div>';
 
   html += renderFilterBar(leads, isAdmin);
-  html += '<div class="card leads-card"><div class="table-wrap"><table><thead><tr>' +
+  html += '<div class="card"><div class="table-wrap"><table><thead><tr>' +
     '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:100px">Action</th>' +
     '</tr></thead><tbody>';
 
@@ -407,8 +406,8 @@ function renderProcessing(candidates) {
   }
 
   agentNames.forEach(function (agentName) {
-    html += '<div class="card card-accent-teal processing-agent-card">' +
-      '<div class="card-header-gradient processing-agent-header">' + escapeHtml(agentName) + '</div>';
+    html += '<div class="card processing-agent-card">' +
+      '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>';
     var groups = byAgent[agentName];
     var groupNames = Object.keys(groups).sort();
     groupNames.forEach(function (groupName) {

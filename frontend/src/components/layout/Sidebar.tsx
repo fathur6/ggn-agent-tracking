@@ -36,7 +36,7 @@ export function Sidebar() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-3 px-3 py-2 rounded-sm text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-foreground hover:bg-border/30',

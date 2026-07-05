@@ -9,3 +9,6 @@ apps-script/Config.gs
 *.png
 v*.md
 *.yml
+graphify-out/
+.planning/graphs/
+.planning/cache/

@@ -10,36 +10,33 @@
 <body>
 <div class="greeting-popup" id="greeting-popup">
   <div class="greeting-content">
-    <img class="greeting-logo" src="https://i.postimg.cc/L6bJj0H1/GS-logo-color-cropped.png" alt="UniSZA Graduate School">
-    <div class="greeting-title">Selamat Datang</div>
+    <div class="greeting-title">Postgraduate Application</div>
     <div class="greeting-sub">
-      Pusat Pengajian Siswazah UniSZA<br>
-      Isi borang permohonan untuk mendapatkan<br>
-      surat tawaran bersyarat anda.
+      UniSZA Graduate School<br>
+      Submit your details for a conditional offer letter.
     </div>
-    <button class="greeting-btn" onclick="dismissGreeting()">Mulakan Permohonan</button>
+    <button class="greeting-btn" onclick="dismissGreeting()">Start Application</button>
   </div>
 </div>
 <div class="public-form-page" id="public-form-page" style="display:none">
   <div class="public-form-card">
-    <img src="https://i.postimg.cc/L6bJj0H1/GS-logo-color-cropped.png" alt="UniSZA Graduate School" class="public-form-logo">
     <h1>UniSZA Postgraduate Application</h1>
-    <div class="subtitle" style="text-align:center">Submit your details for a conditional offer letter</div>
+    <div class="subtitle">Submit your details for a conditional offer letter</div>
 
     <div id="form-status" class="login-error"></div>
 
     <form id="public-form" onsubmit="event.preventDefault(); submitForm();">
       <div class="form-group">
         <label class="label">Full Name *</label>
-        <input id="pf-fullName" class="input" required>
+        <input id="pf-fullName" class="input" required placeholder="e.g. Ali bin Ahmad">
       </div>
       <div class="form-group">
         <label class="label">Email *</label>
-        <input id="pf-email" class="input" type="email" required>
+        <input id="pf-email" class="input" type="email" required placeholder="you@example.com">
       </div>
       <div class="form-group">
         <label class="label">Passport Number *</label>
-        <input id="pf-passport" class="input" required>
+        <input id="pf-passport" class="input" required placeholder="A12345678">
       </div>
       <div class="form-group">
         <label class="label">Nationality</label>
@@ -66,7 +63,7 @@
     </form>
 
     <div id="result-box" class="result" style="display:none">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Application Submitted!</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Application Submitted</div>
       <div class="app-id" id="result-appId"></div>
       <div style="font-size:12px;color:var(--text2);margin-top:4px">Your conditional offer letter has been sent to your email.</div>
     </div>
