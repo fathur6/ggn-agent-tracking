@@ -723,6 +723,32 @@ function setupEmgsCronTrigger() {
   }
 }
 
+var COUNTRY_TO_CODE = {
+  'Afghanistan':'AF','Albania':'AL','Algeria':'DZ','Andorra':'AD','Angola':'AO','Antigua and Barbuda':'AG','Argentina':'AR','Armenia':'AM','Australia':'AU','Austria':'AT','Azerbaijan':'AZ',
+  'Bahamas':'BS','Bahrain':'BH','Bangladesh':'BD','Barbados':'BB','Belarus':'BY','Belgium':'BE','Belize':'BZ','Benin':'BJ','Bhutan':'BT','Bolivia':'BO','Bosnia and Herzegovina':'BA','Botswana':'BW','Brazil':'BR','Brunei':'BN','Bulgaria':'BG','Burkina Faso':'BF','Burundi':'BI',
+  'Cambodia':'KH','Cameroon':'CM','Canada':'CA','Cape Verde':'CV','Central African Republic':'CF','Chad':'TD','Chile':'CL','China':'CN','Colombia':'CO','Comoros':'KM','Congo':'CG','Costa Rica':'CR','Croatia':'HR','Cuba':'CU','Cyprus':'CY','Czech Republic':'CZ',
+  'Denmark':'DK','Djibouti':'DJ','Dominica':'DM','Dominican Republic':'DO',
+  'Ecuador':'EC','Egypt':'EG','El Salvador':'SV','Equatorial Guinea':'GQ','Eritrea':'ER','Estonia':'EE','Eswatini':'SZ','Ethiopia':'ET',
+  'Fiji':'FJ','Finland':'FI','France':'FR',
+  'Gabon':'GA','Gambia':'GM','Georgia':'GE','Germany':'DE','Ghana':'GH','Greece':'GR','Grenada':'GD','Guatemala':'GT','Guinea':'GN','Guinea-Bissau':'GW','Guyana':'GY',
+  'Haiti':'HT','Honduras':'HN','Hungary':'HU',
+  'Iceland':'IS','India':'IN','Indonesia':'ID','Iran':'IR','Iraq':'IQ','Ireland':'IE','Israel':'IL','Italy':'IT',
+  'Jamaica':'JM','Japan':'JP','Jordan':'JO',
+  'Kazakhstan':'KZ','Kenya':'KE','Kiribati':'KI','Kuwait':'KW','Kyrgyzstan':'KG',
+  'Laos':'LA','Latvia':'LV','Lebanon':'LB','Lesotho':'LS','Liberia':'LR','Libya':'LY','Liechtenstein':'LI','Lithuania':'LT','Luxembourg':'LU',
+  'Madagascar':'MG','Malawi':'MW','Malaysia':'MY','Maldives':'MV','Mali':'ML','Malta':'MT','Marshall Islands':'MH','Mauritania':'MR','Mauritius':'MU','Mexico':'MX','Micronesia':'FM','Moldova':'MD','Monaco':'MC','Mongolia':'MN','Montenegro':'ME','Morocco':'MA','Mozambique':'MZ','Myanmar':'MM',
+  'Namibia':'NA','Nauru':'NR','Nepal':'NP','Netherlands':'NL','New Zealand':'NZ','Nicaragua':'NI','Niger':'NE','Nigeria':'NG','North Korea':'KP','North Macedonia':'MK','Norway':'NO',
+  'Oman':'OM',
+  'Pakistan':'PK','Palau':'PW','Palestine':'PS','Panama':'PA','Papua New Guinea':'PG','Paraguay':'PY','Peru':'PE','Philippines':'PH','Poland':'PL','Portugal':'PT','Qatar':'QA',
+  'Romania':'RO','Russia':'RU','Rwanda':'RW',
+  'Saint Kitts and Nevis':'KN','Saint Lucia':'LC','Saint Vincent and the Grenadines':'VC','Samoa':'WS','San Marino':'SM','Sao Tome and Principe':'ST','Saudi Arabia':'SA','Senegal':'SN','Serbia':'RS','Seychelles':'SC','Sierra Leone':'SL','Singapore':'SG','Slovakia':'SK','Slovenia':'SI','Solomon Islands':'SB','Somalia':'SO','South Africa':'ZA','South Korea':'KR','South Sudan':'SS','Spain':'ES','Sri Lanka':'LK','Sudan':'SD','Suriname':'SR','Sweden':'SE','Switzerland':'CH','Syria':'SY',
+  'Taiwan':'TW','Tajikistan':'TJ','Tanzania':'TZ','Thailand':'TH','Timor-Leste':'TL','Togo':'TG','Tonga':'TO','Trinidad and Tobago':'TT','Tunisia':'TN','Turkey':'TR','Turkmenistan':'TM','Tuvalu':'TV',
+  'Uganda':'UG','Ukraine':'UA','United Arab Emirates':'AE','United Kingdom':'GB','United States':'US','Uruguay':'UY','Uzbekistan':'UZ',
+  'Vanuatu':'VU','Vatican City':'VA','Venezuela':'VE','Vietnam':'VN',
+  'Yemen':'YE',
+  'Zambia':'ZM','Zimbabwe':'ZW'
+};
+
 function cronCheckEmgsStatus_() {
   ensureCandidatesHeaders_();
   var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
@@ -738,6 +764,7 @@ function cronCheckEmgsStatus_() {
   if (progressCol === -1) return { error: 'Progress (%) column not found' };
   var statusCol = headers.indexOf('Application Status');
   if (statusCol === -1) return { error: 'Application Status column not found' };
+  var appNoCol = headers.indexOf('Application No.');
 
   var checked = 0;
   var updated = 0;
@@ -748,8 +775,9 @@ function cronCheckEmgsStatus_() {
   for (var i = 1; i < data.length; i++) {
     var passport = String(data[i][passportCol] || '').trim();
     var nationality = String(data[i][nationalityCol] || '').trim();
+    var countryCode = COUNTRY_TO_CODE[nationality] || nationality;
 
-    if (!passport || !nationality) {
+    if (!passport || !countryCode) {
       skipped++;
       continue;
     }
@@ -768,7 +796,7 @@ function cronCheckEmgsStatus_() {
       var formKey = formKeyMatch[1];
       var postPayload = 'form_key=' + encodeURIComponent(formKey) +
         '&travel_doc_no=' + encodeURIComponent(passport) +
-        '&nationality=' + encodeURIComponent(nationality) +
+        '&nationality=' + encodeURIComponent(countryCode) +
         '&agreement=1';
 
       var postResp = UrlFetchApp.fetch(EMGS_POST_URL, {
@@ -790,6 +818,13 @@ function cronCheckEmgsStatus_() {
         if (statusMatch) {
           var emgsStatus = statusMatch[1].trim();
           updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, emgsStatus);
+        }
+
+        if (appNoCol !== -1) {
+          var appNoMatch = resultHtml.match(/Application No[.:\s]*<\/[^>]+>[:\s]*([^<.]+)/i);
+          if (appNoMatch) {
+            updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, appNoCol, appNoMatch[1].trim());
+          }
         }
         updated++;
       }
