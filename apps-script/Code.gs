@@ -1,7 +1,10 @@
 function doGet(e) {
   var page = e && e.parameter && e.parameter.page;
   if (page === 'public') {
-    return HtmlService.createTemplateFromFile('PublicForm')
+    var template = HtmlService.createTemplateFromFile('PublicForm');
+    template.formId = (e && e.parameter && e.parameter.formId) || '';
+    template.agentId = (e && e.parameter && e.parameter.agentId) || '';
+    return template
       .evaluate()
       .setTitle('UniSZA Application')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -134,7 +137,10 @@ function getLeads(filters) {
     var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
 
     if (user.role === 'agent') {
-      leads = leads.filter(function (l) { return l.Agent === user.name; });
+      leads = leads.filter(function (l) {
+        var agentVal = getLeadAgent_(l);
+        return agentVal === user.agentId || agentVal === user.name;
+      });
     }
 
     var showDeleted = filters && filters.showDeleted;
@@ -147,7 +153,7 @@ function getLeads(filters) {
         leads = leads.filter(function (l) { return l.Status === filters.status; });
       }
       if (filters.agent && user.role === 'admin') {
-        leads = leads.filter(function (l) { return l.Agent === filters.agent; });
+        leads = leads.filter(function (l) { return getLeadAgent_(l) === filters.agent; });
       }
       if (filters.dateFrom) {
         leads = leads.filter(function (l) {
@@ -222,7 +228,7 @@ function updateLead(appId, updates) {
     }
     if (rowIndex === -1) throw new Error('Lead not found');
 
-    var validStatuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled', 'Deleted'];
+    var validStatuses = ['New', 'COL Sent', 'Agreed', 'Enrolled', 'Deleted'];
     if (updates.status !== undefined) {
       if (user.role === 'agent' && String(data[rowIndex][agentCol]) !== user.agentId && String(data[rowIndex][agentCol]) !== user.name) {
         throw new Error('Access denied');
@@ -570,6 +576,215 @@ function getForm(formId) {
 
 
 
+function ensureCandidatesHeaders_() {
+  ensureHeader_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', 'Nationality');
+}
+
+function getCandidates() {
+  try {
+    ensureCandidatesHeaders_();
+    var user = getCurrentUser_();
+    var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    var candidates = [];
+    if (data.length > 1) {
+      var headers = data[0];
+      for (var i = 1; i < data.length; i++) {
+        var obj = { _row: i };
+        for (var j = 0; j < headers.length; j++) {
+          obj[headers[j]] = data[i][j];
+        }
+        if (user.role === 'agent' && obj['AgentID'] !== user.agentId) continue;
+        candidates.push(obj);
+      }
+    }
+    return { success: true, candidates: candidates };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function updateCandidate(rowIndex, updates) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var user = getCurrentUser_();
+    var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    if (rowIndex < 1 || rowIndex >= data.length) throw new Error('Candidate not found');
+
+    var headers = data[0];
+    var row = data[rowIndex];
+
+    if (user.role === 'agent') {
+      var agentIdCol = headers.indexOf('AgentID');
+      if (agentIdCol === -1) throw new Error('AgentID column not found');
+      var candidateAgentId = String(row[agentIdCol] || '');
+      if (candidateAgentId !== user.agentId) throw new Error('You can only edit your own candidates');
+    }
+
+    if (updates.fullName !== undefined) {
+      var fnCol = headers.indexOf('Full Name (as in Passport)');
+      if (fnCol === -1) fnCol = headers.indexOf('Full Name');
+      if (fnCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, fnCol, updates.fullName);
+    }
+    if (updates.travelDoc !== undefined) {
+      var tdCol = headers.indexOf('Travel Document No.');
+      if (tdCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, tdCol, updates.travelDoc);
+    }
+    if (updates.nationality !== undefined) {
+      var natCol = headers.indexOf('Nationality');
+      if (natCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, natCol, updates.nationality);
+    }
+    if (updates.appNo !== undefined) {
+      var appCol = headers.indexOf('Application No.');
+      if (appCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, appCol, updates.appNo);
+    }
+    if (user.role === 'admin') {
+      if (updates.group !== undefined) {
+        var grpCol = headers.indexOf('Group');
+        if (grpCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, grpCol, updates.group);
+      }
+      if (updates.status !== undefined) {
+        var stCol = headers.indexOf('Application Status');
+        if (stCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, stCol, updates.status);
+      }
+      if (updates.progress !== undefined) {
+        var progCol = headers.indexOf('Progress (%)');
+        if (progCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, progCol, parseFloat(updates.progress) || 0);
+      }
+    }
+
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function checkEmgsNow() {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    var result = cronCheckEmgsStatus_();
+    return { success: true, result: result };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function setupEmgsCronTrigger() {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'cronCheckEmgsStatus_') {
+        ScriptApp.deleteTrigger(triggers[i]);
+      }
+    }
+
+    ScriptApp.newTrigger('cronCheckEmgsStatus_')
+      .timeBased()
+      .everyWeeks(1)
+      .onWeekDay(ScriptApp.WeekDay.MONDAY)
+      .atHour(6)
+      .create();
+    ScriptApp.newTrigger('cronCheckEmgsStatus_')
+      .timeBased()
+      .everyWeeks(1)
+      .onWeekDay(ScriptApp.WeekDay.THURSDAY)
+      .atHour(6)
+      .create();
+
+    return { success: true, message: 'Triggers set for Mon/Thu at 06:00 MYT' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function cronCheckEmgsStatus_() {
+  ensureCandidatesHeaders_();
+  var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { checked: 0, updated: 0, skipped: 0 };
+
+  var headers = data[0];
+  var passportCol = headers.indexOf('Travel Document No.');
+  if (passportCol === -1) return { error: 'Travel Document No. column not found' };
+  var nationalityCol = headers.indexOf('Nationality');
+  if (nationalityCol === -1) return { error: 'Nationality column not found' };
+  var progressCol = headers.indexOf('Progress (%)');
+  if (progressCol === -1) return { error: 'Progress (%) column not found' };
+  var statusCol = headers.indexOf('Application Status');
+  if (statusCol === -1) return { error: 'Application Status column not found' };
+
+  var checked = 0;
+  var updated = 0;
+  var skipped = 0;
+  var EMGS_FORM_URL = 'https://visa.educationmalaysia.gov.my/emgs/application/searchForm/';
+  var EMGS_POST_URL = 'https://visa.educationmalaysia.gov.my/emgs/application/searchPost/';
+
+  for (var i = 1; i < data.length; i++) {
+    var passport = String(data[i][passportCol] || '').trim();
+    var nationality = String(data[i][nationalityCol] || '').trim();
+
+    if (!passport || !nationality) {
+      skipped++;
+      continue;
+    }
+
+    checked++;
+    try {
+      var getResp = UrlFetchApp.fetch(EMGS_FORM_URL, {
+        muteHttpExceptions: true,
+        followRedirects: true,
+      });
+      var formHtml = getResp.getContentText();
+
+      var formKeyMatch = formHtml.match(/name="form_key"\s+value="([^"]+)"/i);
+      if (!formKeyMatch) continue;
+
+      var formKey = formKeyMatch[1];
+      var postPayload = 'form_key=' + encodeURIComponent(formKey) +
+        '&travel_doc_no=' + encodeURIComponent(passport) +
+        '&nationality=' + encodeURIComponent(nationality) +
+        '&agreement=1';
+
+      var postResp = UrlFetchApp.fetch(EMGS_POST_URL, {
+        method: 'post',
+        payload: postPayload,
+        contentType: 'application/x-www-form-urlencoded',
+        muteHttpExceptions: true,
+        followRedirects: true,
+      });
+      var resultHtml = postResp.getContentText();
+
+      var pctMatch = resultHtml.match(/<h2>(\d+)%<\/h2>/i);
+      if (pctMatch) {
+        var pct = parseInt(pctMatch[1], 10);
+        var decimalPct = pct / 100;
+        updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, progressCol, decimalPct);
+
+        var statusMatch = resultHtml.match(/Application Status[:\s]*<\/[^>]+>[:\s]*([^<.]+)/i);
+        if (statusMatch) {
+          var emgsStatus = statusMatch[1].trim();
+          updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', i, statusCol, emgsStatus);
+        }
+        updated++;
+      }
+    } catch (reqErr) {
+      Logger.log('EMGS check failed for ' + passport + ': ' + reqErr);
+    }
+
+    if (i < data.length - 1) {
+      Utilities.sleep(2000);
+    }
+  }
+
+  return { checked: checked, updated: updated, skipped: skipped };
+}
+
 function getDashboard(agentIdFilter) {
   try {
     var summary = getDashboardSummary_(agentIdFilter);
@@ -718,4 +933,10 @@ function getLocationCol_(headers) {
   if (idx !== -1) return idx;
   return headers.indexOf('Location');
 }
+
+function getLeadAgent_(lead) {
+  return lead['AgentID'] || lead['Agent'] || '';
+}
+
+
 

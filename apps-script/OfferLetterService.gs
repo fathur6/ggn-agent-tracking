@@ -53,7 +53,7 @@ function generateAndSendOffer_(input) {
       input.nationality || '',
       input.programme || '',
       input.structure || '',
-      'Offer Sent',
+      'COL Sent',
     ];
 
     sheet.appendRow(rowValues);

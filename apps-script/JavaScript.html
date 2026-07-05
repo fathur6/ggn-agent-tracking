@@ -74,6 +74,7 @@ function navigate(page) {
   if (nav) nav.classList.add('active');
   if (page === 'dashboard') loadDashboard();
   if (page === 'leads') loadLeads();
+  if (page === 'processing') loadProcessing();
   if (page === 'agents') loadAgents();
   if (page === 'forms') loadForms();
   if (window.innerWidth < 769) closeMenu();
@@ -100,8 +101,8 @@ function escapeHtml(str) {
 function statusBadge(status) {
   var s = status || 'New';
   var cls = 'badge-new';
-  if (s === 'Offer Sent') cls = 'badge-offer-sent';
-  if (s === 'Accepted') cls = 'badge-accepted';
+  if (s === 'COL Sent') cls = 'badge-offer-sent';
+  if (s === 'Agreed') cls = 'badge-accepted';
   if (s === 'Enrolled') cls = 'badge-enrolled';
   if (s === 'Deleted') cls = 'badge-deleted';
   return '<span class="badge ' + cls + '">' + escapeHtml(s) + '</span>';
@@ -154,8 +155,8 @@ function loadDashboard() {
     var s = result.summary;
     var html = '<div class="stat-grid stat-grid-5">' +
       '<div class="stat-card stat-card-glow-primary"><div class="stat-label">Total Leads</div><div class="stat-value primary">' + s.totalLeads + '</div></div>' +
-      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">Offers Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
-      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Accepted</div><div class="stat-value success">' + s.accepted + '</div></div>' +
+      '<div class="stat-card stat-card-glow-primary"><div class="stat-label">COL Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
+      '<div class="stat-card stat-card-glow-success"><div class="stat-label">Agreed</div><div class="stat-value success">' + s.accepted + '</div></div>' +
       '<div class="stat-card stat-card-glow-success"><div class="stat-label">Enrolled</div><div class="stat-value success">' + s.enrolled + '</div></div>' +
       '<div class="stat-card stat-card-glow-warning"><div class="stat-label">Conversion</div><div class="stat-value warning">' + s.conversionRate + '%</div></div>' +
     '</div>';
@@ -165,7 +166,7 @@ function loadDashboard() {
     if (byAgentRows.length === 0) {
       html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)"></div><div class="empty-label">No agent activity yet</div></div>';
     } else {
-      html += '<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Leads</th><th>Offers</th><th>Accepted</th><th>Enrolled</th><th>Conv</th></tr></thead><tbody>';
+      html += '<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Leads</th><th>COL Sent</th><th>Agreed</th><th>Enrolled</th><th>Conv</th></tr></thead><tbody>';
       byAgentRows.forEach(function (a) {
         var conv = a.offersSent > 0 ? Math.round((a.accepted / a.offersSent) * 100) : 0;
         html += '<tr><td>' + escapeHtml(a.agentName) + '</td><td>' + a.leadCount + '</td><td>' + a.offersSent + '</td><td>' + a.accepted + '</td><td>' + a.enrolled + '</td><td>' + conv + '%</td></tr>';
@@ -219,7 +220,7 @@ function renderLeadsView(leads, isAdmin) {
 
   html += renderFilterBar(leads, isAdmin);
   html += '<div class="card leads-card"><div class="table-wrap"><table><thead><tr>' +
-    '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:80px">Action</th>' +
+    '<th>App ID</th><th>Name</th><th>Nationality</th><th>Email</th><th>Programme</th><th>Status</th><th>Date</th><th style="width:100px">Action</th>' +
     '</tr></thead><tbody>';
 
   if (leads.length === 0) {
@@ -234,13 +235,12 @@ function renderLeadsView(leads, isAdmin) {
         '<td>' + escapeHtml(l.Programme) + '</td>' +
         '<td>' + statusBadge(l.Status) + '</td>' +
         '<td>' + formatDate(l.Timestamp) + '</td>' +
-        '<td class="action-cell" style="white-space:nowrap">' +
-          '<button class="btn-icon edit-btn-icon" onclick="editLeadModal(\'' + escapeHtml(l.Reference) + '\')" title="Edit">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
-          '</button>' +
-          '<button class="btn-icon del-btn-icon" onclick="deleteLeadAction(\'' + escapeHtml(l.Reference) + '\')" title="Delete">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>' +
-          '</button>' +
+        '<td class="action-cell">' +
+          '<select class="select action-select" onchange="handleLeadAction(this, \'' + escapeHtml(l.Reference) + '\')">' +
+            '<option value="">Actions</option>' +
+            '<option value="edit">Edit</option>' +
+            '<option value="delete">Delete</option>' +
+          '</select>' +
         '</td>' +
         '</tr>';
     });
@@ -250,13 +250,13 @@ function renderLeadsView(leads, isAdmin) {
 }
 
 function renderFilterBar(leads, isAdmin) {
-  var statuses = ['New', 'Offer Sent', 'Accepted', 'Enrolled'];
+  var statuses = ['New', 'COL Sent', 'Agreed', 'Enrolled'];
   var statusOpts = '<option value="">All Statuses</option>';
   statuses.forEach(function (s) { statusOpts += '<option value="' + s + '" ' + (filterState.status === s ? 'selected' : '') + '>' + s + '</option>'; });
 
   var agents = [];
   var seen = {};
-  leads.forEach(function (l) { if (!seen[l.Agent]) { seen[l.Agent] = true; agents.push(l.Agent); } });
+  leads.forEach(function (l) { if (!seen[l.AgentID]) { seen[l.AgentID] = true; agents.push(l.AgentID); } });
   var agentOpts = '<option value="">All Agents</option>';
   agents.forEach(function (a) { agentOpts += '<option value="' + escapeHtml(a) + '" ' + (filterState.agent === a ? 'selected' : '') + '>' + escapeHtml(a) + '</option>'; });
 
@@ -292,7 +292,7 @@ function editLeadModal(appId) {
     var l = result.lead;
     var isAdmin = CURRENT_USER.role === 'admin';
     var statusOpts = '';
-    ['New', 'Offer Sent', 'Accepted', 'Enrolled'].forEach(function (s) {
+    ['New', 'COL Sent', 'Agreed', 'Enrolled'].forEach(function (s) {
       statusOpts += '<option value="' + s + '" ' + (l.Status === s ? 'selected' : '') + '>' + s + '</option>';
     });
 
@@ -305,7 +305,7 @@ function editLeadModal(appId) {
       (isAdmin ? '<div class="form-group"><label class="label">Nationality</label><input id="ed-nationality" class="input" value="' + escapeHtml(l.Nationality) + '"></div>' : '') +
       (isAdmin ? '<div class="form-group"><label class="label">Programme</label><input id="ed-programme" class="input" value="' + escapeHtml(l.Programme) + '"></div>' : '') +
       (isAdmin ? '<div class="form-group"><label class="label">Structure</label><input id="ed-structure" class="input" value="' + escapeHtml(l.Structure) + '"></div>' : '') +
-      (isAdmin ? '<div class="form-group"><label class="label">Location</label><input id="ed-location" class="input" value="' + escapeHtml(l.Location) + '"></div>' : '') +
+      (isAdmin ? '<div class="form-group"><label class="label">Location</label><input id="ed-location" class="input" value="' + escapeHtml(l.LocationEvent) + '"></div>' : '') +
       '<div class="form-group"><label class="label">Remarks</label><textarea id="ed-remarks" class="input">' + escapeHtml(l.Remarks) + '</textarea></div>' +
       '<div class="form-group"><label class="label">Status</label><select id="ed-status" class="select">' + statusOpts + '</select></div>' +
       '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
@@ -350,6 +350,183 @@ function closeLeadModal(e) {
   var overlay = document.querySelector('.modal-overlay');
   if (overlay) overlay.remove();
   if (e && e.target !== e.currentTarget) return;
+}
+
+function handleLeadAction(sel, appId) {
+  var val = sel.value;
+  sel.value = '';
+  if (val === 'edit') editLeadModal(appId);
+  if (val === 'delete') deleteLeadAction(appId);
+}
+
+function loadProcessing() {
+  var el = document.getElementById('processing-content');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
+    renderProcessing(result.candidates);
+  }).getCandidates();
+}
+
+function getEmgsStatus_(rawProgress) {
+  if (isNaN(rawProgress) || rawProgress <= 0) return 'Application Not Started';
+  if (rawProgress <= 0.15) return 'Document Review';
+  if (rawProgress <= 0.32) return 'Institutional & EMGS Vetting';
+  if (rawProgress <= 0.35) return 'Submitted to Immigration';
+  return 'eVAL Approved / eVisa Ready';
+}
+
+function emgsStatusBadge_(status) {
+  var cls = 'badge-new';
+  if (status === 'Document Review') cls = 'badge-warning';
+  if (status === 'Institutional & EMGS Vetting') cls = 'badge-offer-sent';
+  if (status === 'Submitted to Immigration') cls = 'badge-offer-sent';
+  if (status === 'eVAL Approved / eVisa Ready') cls = 'badge-accepted';
+  return '<span class="badge ' + cls + '">' + escapeHtml(status) + '</span>';
+}
+
+function renderProcessing(candidates) {
+  var el = document.getElementById('processing-content');
+  var byAgent = {};
+  candidates.forEach(function (c) {
+    var agentName = c['AgentName'] || 'Unknown';
+    if (!byAgent[agentName]) byAgent[agentName] = {};
+    var group = c['Group'] || 'Default';
+    if (!byAgent[agentName][group]) byAgent[agentName][group] = [];
+    byAgent[agentName][group].push(c);
+  });
+
+  var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
+    (CURRENT_USER.role === 'admin' ? '<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div>' : '') +
+    '</div>';
+  var agentNames = Object.keys(byAgent).sort();
+  if (agentNames.length === 0) {
+    html += '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No candidates found</div></div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  agentNames.forEach(function (agentName) {
+    html += '<div class="card card-accent-teal processing-agent-card">' +
+      '<div class="card-header-gradient processing-agent-header">' + escapeHtml(agentName) + '</div>';
+    var groups = byAgent[agentName];
+    var groupNames = Object.keys(groups).sort();
+    groupNames.forEach(function (groupName) {
+      html += '<div class="processing-group-section">' +
+        '<div class="processing-group-title">' + escapeHtml(groupName) + ' (' + groups[groupName].length + ')</div>' +
+        '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Full Name</th>' +
+        '<th>Travel Document</th>' +
+        '<th>Nationality</th>' +
+        '<th>App No</th>' +
+        '<th>Status</th>' +
+        '<th>Progress</th>' +
+        '<th style="width:60px">Action</th>' +
+        '</tr></thead><tbody>';
+      groups[groupName].forEach(function (r) {
+        var rawProgress = parseFloat(r['Progress (%)'] || r['Application Progress (%)'] || 0);
+        var progressText = (isNaN(rawProgress) ? 0 : Math.round(rawProgress * 100)) + '%';
+        var emgsStatus_ = getEmgsStatus_(rawProgress);
+        html += '<tr data-crow="' + r._row + '" data-group="' + escapeHtml(groupName) + '" data-status="' + escapeHtml(r['Application Status'] || '') + '" data-progress="' + rawProgress + '">' +
+          '<td>' + escapeHtml(r['Full Name (as in Passport)'] || r['Full Name'] || '') + '</td>' +
+          '<td>' + escapeHtml(r['Travel Document No.'] || '') + '</td>' +
+          '<td>' + escapeHtml(r['Nationality'] || '') + '</td>' +
+          '<td>' + escapeHtml(r['Application No.'] || '') + '</td>' +
+          '<td>' + emgsStatusBadge_(emgsStatus_) + '</td>' +
+          '<td>' + progressText + '</td>' +
+          '<td class="action-cell">' +
+            '<button class="btn-icon edit-btn-icon" onclick="editCandidateModal(' + r._row + ')">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
+            '</button>' +
+          '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function runEmgsCheck() {
+  var btn = document.getElementById('emgs-check-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+  google.script.run.withSuccessHandler(function (r) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Check EMGS'; }
+    if (!r.success) { alert('EMGS check failed: ' + (r.error || 'unknown')); return; }
+    var res = r.result;
+    var msg = 'Checked: ' + res.checked + ', Updated: ' + res.updated + ', Skipped: ' + res.skipped;
+    if (res.error) msg = 'Error: ' + res.error;
+    alert(msg);
+    loadProcessing();
+  }).checkEmgsNow();
+}
+
+function setupEmgsSchedule() {
+  if (!confirm('Set up automatic EMGS checks every Monday & Thursday at 06:00 MYT?')) return;
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { alert('Failed: ' + r.error); return; }
+    alert(r.message || 'Schedule set up successfully');
+  }).setupEmgsCronTrigger();
+}
+
+function editCandidateModal(rowIndex) {
+  var row = document.querySelector('tr[data-crow="' + rowIndex + '"]');
+  if (!row) return;
+  var cells = row.querySelectorAll('td');
+  var fullName = cells[0].textContent.trim();
+  var travelDoc = cells[1].textContent.trim();
+  var nationality = cells[2].textContent.trim();
+  var appNo = cells[3].textContent.trim();
+  var statusText = cells[4].textContent.trim();
+  var progressText = cells[5].textContent.replace('%', '').trim();
+  var groupName = row.getAttribute('data-group') || '';
+  var isAdmin = CURRENT_USER.role === 'admin';
+
+  var html = '<div class="modal-overlay" style="display:flex" id="candidate-edit-overlay" onclick="closeCandidateModal(event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+    '<div class="flex-between mb-4"><div class="card-title">Edit Candidate</div>' +
+    '<button class="btn btn-outline btn-sm" onclick="closeCandidateModal()">Close</button></div>' +
+    '<div class="form-group"><label class="label">Full Name</label><input id="edc-fullName" class="input" value="' + escapeHtml(fullName) + '"></div>' +
+    '<div class="form-group"><label class="label">Travel Document No.</label><input id="edc-travelDoc" class="input" value="' + escapeHtml(travelDoc) + '"></div>' +
+    '<div class="form-group"><label class="label">Nationality</label><input id="edc-nationality" class="input" value="' + escapeHtml(nationality) + '"></div>' +
+    '<div class="form-group"><label class="label">Application No.</label><input id="edc-appNo" class="input" value="' + escapeHtml(appNo) + '"></div>' +
+    (isAdmin ? '<div class="form-group"><label class="label">Group</label><input id="edc-group" class="input" value="' + escapeHtml(groupName) + '"></div>' : '') +
+    (isAdmin ? '<div class="form-group"><label class="label">Application Status</label><input id="edc-status" class="input" value="' + escapeHtml(statusText) + '"></div>' : '') +
+    (isAdmin ? '<div class="form-group"><label class="label">Progress (%)</label><input id="edc-progress" class="input" type="number" step="1" min="0" max="100" value="' + Math.round((parseFloat(row.getAttribute('data-progress')) || 0) * 100) + '"></div>' : '') +
+    '<input type="hidden" id="edc-rowIndex" value="' + rowIndex + '">' +
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeCandidateModal()">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="saveCandidateEdit()">Save</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeCandidateModal(e) {
+  var overlay = document.getElementById('candidate-edit-overlay');
+  if (overlay) overlay.remove();
+  if (e && e.target !== overlay) return;
+}
+
+function saveCandidateEdit() {
+  var rowIndex = parseInt(document.getElementById('edc-rowIndex').value, 10);
+  var updates = {};
+
+  var fn = document.getElementById('edc-fullName'); if (fn) updates.fullName = fn.value;
+  var td = document.getElementById('edc-travelDoc'); if (td) updates.travelDoc = td.value;
+  var nat = document.getElementById('edc-nationality'); if (nat) updates.nationality = nat.value;
+  var app = document.getElementById('edc-appNo'); if (app) updates.appNo = app.value;
+
+  if (CURRENT_USER.role === 'admin') {
+    var grp = document.getElementById('edc-group'); if (grp) updates.group = grp.value;
+    var st = document.getElementById('edc-status'); if (st) updates.status = st.value;
+    var prog = document.getElementById('edc-progress'); if (prog) updates.progress = parseFloat(prog.value) / 100;
+  }
+
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { alert(r.error || 'Save failed'); return; }
+    closeCandidateModal();
+    loadProcessing();
+  }).updateCandidate(rowIndex, updates);
 }
 
 function loadAgents() {

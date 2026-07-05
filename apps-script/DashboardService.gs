@@ -4,20 +4,23 @@ function getDashboardSummary_(agentIdFilter) {
   var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
 
   if (user.role === 'agent') {
-    leads = leads.filter(function (l) { return l.Agent === user.name; });
+    leads = leads.filter(function (l) {
+      var agentVal = getLeadAgent_(l);
+      return agentVal === user.agentId || agentVal === user.name;
+    });
   } else if (user.role === 'admin' && agentIdFilter) {
-    leads = leads.filter(function (l) { return l.Agent === agentIdFilter; });
+    leads = leads.filter(function (l) { return getLeadAgent_(l) === agentIdFilter; });
   }
 
   var totalLeads = leads.length;
-  var offersSent = leads.filter(function (l) { return l.Status === 'Offer Sent'; }).length;
-  var accepted = leads.filter(function (l) { return l.Status === 'Accepted'; }).length;
+  var offersSent = leads.filter(function (l) { return l.Status === 'COL Sent'; }).length;
+  var accepted = leads.filter(function (l) { return l.Status === 'Agreed'; }).length;
   var enrolled = leads.filter(function (l) { return l.Status === 'Enrolled'; }).length;
   var conversionRate = offersSent > 0 ? Math.round((accepted / offersSent) * 100) : 0;
 
   var byAgent = {};
   leads.forEach(function (l) {
-    var key = l.Agent || 'Unknown';
+    var key = getLeadAgent_(l) || 'Unknown';
     if (!byAgent[key]) {
       byAgent[key] = { agentName: key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
     }

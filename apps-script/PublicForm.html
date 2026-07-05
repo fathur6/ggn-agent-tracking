@@ -153,6 +153,9 @@ function getUrlParam(name) {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+var FORM_ID = '<?!= formId ?>';
+var AGENT_ID = '<?!= agentId ?>';
+
 function submitForm() {
   var data = {
     fullName: document.getElementById('pf-fullName').value.trim(),
@@ -161,8 +164,8 @@ function submitForm() {
     nationality: document.getElementById('pf-nationality').value.trim(),
     structure: document.getElementById('pf-structure').value,
     programme: document.getElementById('pf-programme').value.trim(),
-    agentId: getUrlParam('agentId'),
-    formId: getUrlParam('formId'),
+    agentId: AGENT_ID,
+    formId: FORM_ID,
   };
 
   var el = document.getElementById('form-status');
