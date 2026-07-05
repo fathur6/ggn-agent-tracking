@@ -2,6 +2,7 @@
 :root {
   --canvas: #ffffff;
   --primary: #17171c;
+  --on-primary: #ffffff;
   --ink: #212121;
   --muted: #93939f;
   --slate: #75758a;
@@ -37,6 +38,7 @@
   --border-light: #333333;
   --soft-stone: #2a2a2a;
   --primary: #ffffff;
+  --on-primary: #17171c;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -127,7 +129,7 @@ body {
 .user-avatar {
   width: 32px; height: 32px; border-radius: 999px; background: var(--primary);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 500; color: white;
+  font-size: 12px; font-weight: 500; color: var(--on-primary);
 }
 .user-name { font-size: 14px; font-weight: 400; }
 .user-role { font-size: 12px; color: var(--text2); text-transform: capitalize; }
@@ -205,7 +207,7 @@ body {
 }
 .btn-primary {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   padding: 10px 24px;
 }
 .btn-primary:hover { opacity: 0.85; }
@@ -288,7 +290,7 @@ tr:hover td { background: var(--soft-stone); }
 .badge-accepted { background: #edfce9; color: #003c33; }
 .badge-enrolled { background: #f1f5ff; color: #1863dc; }
 .badge-new { background: var(--soft-stone); color: var(--ink); }
-.badge-admin { background: var(--primary); color: white; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 8px; }
+.badge-admin { background: var(--primary); color: var(--on-primary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 8px; }
 
 .agent-toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
 .agent-toggle input { opacity: 0; width: 0; height: 0; }
@@ -415,7 +417,7 @@ tr:hover td { background: var(--soft-stone); }
 .cal-grid td { font-size: 13px; padding: 6px; text-align: center; cursor: pointer; border-radius: var(--radius-xs); border: none; }
 .cal-grid td:hover { background: var(--soft-stone); }
 .cal-grid td.today { border: 1px solid var(--hairline); }
-.cal-grid td.selected { background: var(--primary); color: white; font-weight: 500; }
+.cal-grid td.selected { background: var(--primary); color: var(--on-primary); font-weight: 500; }
 .cal-grid td.selected:hover { background: var(--primary); }
 .cal-grid td.other { color: var(--text2); opacity: 0.4; }
 .date-btn {
@@ -474,7 +476,7 @@ tr:hover td { background: var(--soft-stone); }
 .agent-avatar {
   width: 28px; height: 28px; border-radius: 999px;
   background: var(--primary);
-  color: #fff; font-size: 12px; font-weight: 500;
+  color: var(--on-primary); font-size: 12px; font-weight: 500;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .agent-name { font-size: 14px; font-weight: 500; color: var(--ink); }
@@ -540,7 +542,7 @@ tr:hover td { background: var(--soft-stone); }
 .greeting-sub { font-size: 14px; color: var(--text2); margin-bottom: 32px; line-height: 1.6; }
 .greeting-btn {
   display: inline-block; padding: 10px 32px; border-radius: var(--radius-pill); border: none;
-  background: var(--primary); color: white; font-size: 14px; font-weight: 500; cursor: pointer;
+  background: var(--primary); color: var(--on-primary); font-size: 14px; font-weight: 500; cursor: pointer;
   font-family: var(--font-body); transition: all 0.15s;
 }
 .greeting-btn:hover { opacity: 0.85; }
