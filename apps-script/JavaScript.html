@@ -358,12 +358,38 @@ function handleLeadAction(sel, appId) {
   if (val === 'delete') deleteLeadAction(appId);
 }
 
+var _emgsCountdownInterval = null;
+
 function loadProcessing() {
   var el = document.getElementById('processing-content');
   el.innerHTML = '<div class="loading">Loading...</div>';
+  if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
     renderProcessing(result.candidates);
+    google.script.run.withSuccessHandler(function (sched) {
+      var countEl = document.getElementById('emgs-countdown');
+      if (!countEl) return;
+      if (sched.active && sched.nextRun) {
+        var nextDate = new Date(sched.nextRun);
+        countEl.style.display = 'block';
+        function tick() {
+          var now = new Date();
+          var diff = nextDate - now;
+          if (diff <= 0) { countEl.textContent = 'EMGS: running...'; return; }
+          var d = Math.floor(diff / 86400000);
+          var h = Math.floor((diff % 86400000) / 3600000);
+          var m = Math.floor((diff % 3600000) / 60000);
+          var s = Math.floor((diff % 60000) / 1000);
+          countEl.textContent = 'Next EMGS: ' + d + 'd ' + h + 'h ' + m + 'm ' + s + 's';
+        }
+        tick();
+        if (_emgsCountdownInterval) clearInterval(_emgsCountdownInterval);
+        _emgsCountdownInterval = setInterval(tick, 1000);
+      } else {
+        countEl.textContent = 'EMGS: not scheduled';
+      }
+    }).getNextEmgsSchedule();
   }).getCandidates();
 }
 
@@ -396,7 +422,7 @@ function renderProcessing(candidates) {
   });
 
   var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
-    (CURRENT_USER.role === 'admin' ? '<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div>' : '') +
+    (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
     '</div>';
   var agentNames = Object.keys(byAgent).sort();
   if (agentNames.length === 0) {

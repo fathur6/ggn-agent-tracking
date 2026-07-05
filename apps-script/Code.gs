@@ -692,6 +692,23 @@ function checkEmgsNow() {
   }
 }
 
+function getNextEmgsSchedule() {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') return { success: true, nextRun: null, active: false };
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'cronCheckEmgsStatus_') {
+        var next = triggers[i].getNextRunTime();
+        if (next) return { success: true, nextRun: next.toISOString(), active: true };
+      }
+    }
+    return { success: true, nextRun: null, active: false };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function setupEmgsCronTrigger() {
   try {
     var user = getCurrentUser_();
