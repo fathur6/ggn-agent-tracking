@@ -219,6 +219,9 @@ body {
 }
 .btn-outline:hover { border-color: var(--ink); }
 .btn-danger { background: var(--error); color: white; }
+.btn-danger:hover { opacity: 0.85; }
+.del-confirm { color: var(--error); border-color: var(--error); }
+.del-confirm:hover { background: var(--error); color: white; }
 .btn-sm { padding: 6px 14px; font-size: 13px; }
 .btn-secondary {
   background: none;
@@ -290,6 +293,7 @@ tr:hover td { background: var(--soft-stone); }
 .badge-accepted { background: #edfce9; color: #003c33; }
 .badge-enrolled { background: #f1f5ff; color: #1863dc; }
 .badge-new { background: var(--soft-stone); color: var(--ink); }
+.badge-deleted { background: #fef2f2; color: var(--error); }
 .badge-admin { background: var(--primary); color: var(--on-primary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 8px; }
 
 .agent-toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
@@ -547,7 +551,9 @@ tr:hover td { background: var(--soft-stone); }
 .processing-agent-header { font-size: 15px; font-weight: 500; color: var(--ink); }
 .processing-group-section { padding: 16px 20px 20px; border-bottom: 1px solid var(--border-light); }
 .processing-group-section:last-child { border-bottom: none; }
-.processing-group-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+.processing-group-title { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.03em; }
+.processing-group-section .inactive-row td { opacity: 0.4; }
+.processing-group-section .inactive-row:hover td { opacity: 0.6; }
 
 .field-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .field-chip {

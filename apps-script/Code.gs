@@ -598,6 +598,88 @@ function getForm(formId) {
 
 function ensureCandidatesHeaders_() {
   ensureHeader_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', 'Nationality');
+  ensureHeader_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', 'FilingStatus');
+}
+
+function ensureGroupsHeaders_() {
+  var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+  var data = sheet.getDataRange().getValues();
+  if (data.length === 0 || !data[0] || data[0][0] !== 'GroupID') {
+    var headers = ['GroupID','GroupName','StartDate','MainInstitution','Country','ExpectedEndDate','Remarks','FilingStatus','CreatedAt'];
+    if (data.length > 0) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    } else {
+      sheet.appendRow(headers);
+    }
+  }
+}
+
+function createGroup(data) {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    if (!data.groupName) throw new Error('Group name required');
+    
+    ensureGroupsHeaders_();
+    var groupId = 'GRP' + Utilities.getUuid().slice(0, 8).toUpperCase();
+    var row = [
+      groupId,
+      data.groupName,
+      data.startDate || '',
+      data.mainInstitution || '',
+      data.country || '',
+      data.expectedEndDate || '',
+      data.remarks || '',
+      'Active',
+      new Date().toISOString(),
+    ];
+    appendRow_(CONFIG.PROGRESS_SHEET_ID, 'Groups', row);
+    return { success: true, groupId: groupId };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function getGroups() {
+  try {
+    ensureGroupsHeaders_();
+    var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+    return { success: true, groups: groups };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function archiveGroup(groupId) {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
+    if (!found) throw new Error('Group not found');
+    var headers = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Groups')[0];
+    var statusCol = headers.indexOf('FilingStatus');
+    if (statusCol === -1) throw new Error('FilingStatus column not found');
+    updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Groups', found.rowIndex, statusCol, 'Archived');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function deleteGroup(groupId) {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
+    if (!found) throw new Error('Group not found');
+    var headers = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Groups')[0];
+    var statusCol = headers.indexOf('FilingStatus');
+    if (statusCol === -1) throw new Error('FilingStatus column not found');
+    updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Groups', found.rowIndex, statusCol, 'Deleted');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 function getCandidates() {
@@ -671,8 +753,64 @@ function updateCandidate(rowIndex, updates) {
         var progCol = headers.indexOf('Progress (%)');
         if (progCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, progCol, parseFloat(updates.progress) || 0);
       }
+      if (updates.filingStatus !== undefined) {
+        var fsCol = headers.indexOf('FilingStatus');
+        if (fsCol !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, fsCol, updates.filingStatus);
+      }
     }
 
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateCandidateFilingStatus(rowIndex, filingStatus) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    var headers = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate')[0];
+    var fsCol = headers.indexOf('FilingStatus');
+    if (fsCol === -1) throw new Error('FilingStatus column not found');
+    updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, fsCol, filingStatus);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addCandidateToGroup(travelDoc, groupName) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+    if (!travelDoc || !groupName) throw new Error('Travel document and group name required');
+    
+    var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    if (data.length <= 1) throw new Error('No candidates found');
+    var headers = data[0];
+    var tdCol = headers.indexOf('Travel Document No.');
+    if (tdCol === -1) throw new Error('Travel Document No. column not found');
+    var grpCol = headers.indexOf('Group');
+    if (grpCol === -1) throw new Error('Group column not found');
+    
+    var rowIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][tdCol] || '').trim().toLowerCase() === String(travelDoc).trim().toLowerCase()) {
+        rowIndex = i;
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('No candidate found with that Travel Document No.');
+    
+    updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Candidate', rowIndex, grpCol, groupName);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };

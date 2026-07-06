@@ -412,65 +412,96 @@ function emgsStatusBadge_(status) {
 
 function renderProcessing(candidates) {
   var el = document.getElementById('processing-content');
-  var byAgent = {};
-  candidates.forEach(function (c) {
-    var agentName = c['AgentName'] || 'Unknown';
-    if (!byAgent[agentName]) byAgent[agentName] = {};
-    var group = c['Group'] || 'Default';
-    if (!byAgent[agentName][group]) byAgent[agentName][group] = [];
-    byAgent[agentName][group].push(c);
-  });
-
-  var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
-    (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
-    '</div>';
-  var agentNames = Object.keys(byAgent).sort();
-  if (agentNames.length === 0) {
-    html += '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No candidates found</div></div>';
-    el.innerHTML = html;
-    return;
-  }
-
-  agentNames.forEach(function (agentName) {
-    html += '<div class="card processing-agent-card">' +
-      '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>';
-    var groups = byAgent[agentName];
-    var groupNames = Object.keys(groups).sort();
-    groupNames.forEach(function (groupName) {
-      html += '<div class="processing-group-section">' +
-        '<div class="processing-group-title">' + escapeHtml(groupName) + ' (' + groups[groupName].length + ')</div>' +
-        '<div class="table-wrap"><table><thead><tr>' +
-        '<th>Full Name</th>' +
-        '<th>Travel Document</th>' +
-        '<th>Nationality</th>' +
-        '<th>App No</th>' +
-        '<th>Status</th>' +
-        '<th>Progress</th>' +
-        '<th style="width:60px">Action</th>' +
-        '</tr></thead><tbody>';
-      groups[groupName].forEach(function (r) {
-        var rawProgress = parseFloat(r['Progress (%)'] || r['Application Progress (%)'] || 0);
-        var progressText = (isNaN(rawProgress) ? 0 : Math.round(rawProgress * 100)) + '%';
-        var emgsStatus_ = getEmgsStatus_(rawProgress);
-        html += '<tr data-crow="' + r._row + '" data-group="' + escapeHtml(groupName) + '" data-status="' + escapeHtml(r['Application Status'] || '') + '" data-progress="' + rawProgress + '">' +
-          '<td>' + escapeHtml(r['Full Name (as in Passport)'] || r['Full Name'] || '') + '</td>' +
-          '<td>' + escapeHtml(r['Travel Document No.'] || '') + '</td>' +
-          '<td>' + escapeHtml(r['Nationality'] || '') + '</td>' +
-          '<td>' + escapeHtml(r['Application No.'] || '') + '</td>' +
-          '<td>' + emgsStatusBadge_(emgsStatus_) + '</td>' +
-          '<td>' + progressText + '</td>' +
-          '<td class="action-cell">' +
-            '<button class="btn-icon edit-btn-icon" onclick="editCandidateModal(' + r._row + ')">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
-            '</button>' +
-          '</td>' +
-          '</tr>';
-      });
-      html += '</tbody></table></div></div>';
+  var _this = this;
+  google.script.run.withSuccessHandler(function (groupsResult) {
+    var groups = groupsResult.success ? (groupsResult.groups || []) : [];
+    var byAgent = {};
+    candidates.forEach(function (c) {
+      var agentName = c['AgentName'] || 'Unknown';
+      if (!byAgent[agentName]) byAgent[agentName] = {};
+      var group = c['Group'] || 'Default';
+      if (!byAgent[agentName][group]) byAgent[agentName][group] = [];
+      byAgent[agentName][group].push(c);
     });
-    html += '</div>';
-  });
-  el.innerHTML = html;
+
+    var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
+      (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="showAddGroupModal()">Add Group</button><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
+      '</div>';
+    var agentNames = Object.keys(byAgent).sort();
+    if (agentNames.length === 0) {
+      html += '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-label">No candidates found</div></div>';
+      el.innerHTML = html;
+      return;
+    }
+
+    agentNames.forEach(function (agentName) {
+      html += '<div class="card processing-agent-card">' +
+        '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>';
+      var agentGroups = byAgent[agentName];
+      var groupNames = Object.keys(agentGroups).sort();
+      groupNames.forEach(function (groupName) {
+        var groupObj = null;
+        for (var gi = 0; gi < groups.length; gi++) {
+          if (groups[gi].GroupName === groupName && groups[gi].FilingStatus === 'Active') {
+            groupObj = groups[gi];
+            break;
+          }
+        }
+        var groupId = groupObj ? groupObj.GroupID : '';
+        var isAdmin = CURRENT_USER.role === 'admin';
+        html += '<div class="processing-group-section" data-group="' + escapeHtml(groupName) + '">' +
+          '<div class="flex-between" style="margin-bottom:10px">' +
+          '<div class="processing-group-title">' + escapeHtml(groupName) + ' (' + agentGroups[groupName].length + ')</div>' +
+          (isAdmin && groupId ? '<div class="flex gap-2">' +
+            '<button class="btn-icon" onclick="showArchiveGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Archive group">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>' +
+            '</button>' +
+            '<button class="btn-icon del-btn-icon" onclick="showDeleteGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Delete group">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>' +
+            '</button>' +
+            '<button class="btn-icon" onclick="showAddCandidateModal(\'' + escapeHtml(groupName) + '\')" title="Add candidate to group">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+            '</button>' +
+          '</div>' : '') +
+          '</div>' +
+          '<div class="table-wrap"><table><thead><tr>' +
+          '<th>Full Name</th>' +
+          '<th>Travel Document</th>' +
+          '<th>Nationality</th>' +
+          '<th>App No</th>' +
+          '<th>Status</th>' +
+          '<th>Progress</th>' +
+          '<th style="width:100px">Action</th>' +
+          '</tr></thead><tbody>';
+        agentGroups[groupName].forEach(function (r) {
+          var rawProgress = parseFloat(r['Progress (%)'] || r['Application Progress (%)'] || 0);
+          var progressText = (isNaN(rawProgress) ? 0 : Math.round(rawProgress * 100)) + '%';
+          var emgsStatus_ = getEmgsStatus_(rawProgress);
+          var filingStatus = r['FilingStatus'] || '';
+          var rowClass = filingStatus === 'Deleted' || filingStatus === 'Complete' ? ' class="inactive-row"' : '';
+          html += '<tr' + rowClass + ' data-crow="' + r._row + '" data-group="' + escapeHtml(groupName) + '" data-status="' + escapeHtml(r['Application Status'] || '') + '" data-progress="' + rawProgress + '">' +
+            '<td>' + escapeHtml(r['Full Name (as in Passport)'] || r['Full Name'] || '') + (filingStatus ? ' <span class="badge badge-deleted" style="font-size:10px">' + escapeHtml(filingStatus) + '</span>' : '') + '</td>' +
+            '<td>' + escapeHtml(r['Travel Document No.'] || '') + '</td>' +
+            '<td>' + escapeHtml(r['Nationality'] || '') + '</td>' +
+            '<td>' + escapeHtml(r['Application No.'] || '') + '</td>' +
+            '<td>' + emgsStatusBadge_(emgsStatus_) + '</td>' +
+            '<td>' + progressText + '</td>' +
+            '<td class="action-cell">' +
+              '<button class="btn-icon edit-btn-icon" onclick="editCandidateModal(' + r._row + ')" title="Edit candidate">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
+              '</button>' +
+              (isAdmin ? '<button class="btn-icon del-btn-icon" onclick="showDeleteCandidateModal(' + r._row + ')" title="Delete candidate">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>' +
+              '</button>' : '') +
+            '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+      });
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }).getGroups();
 }
 
 function runEmgsCheck() {
@@ -518,6 +549,7 @@ function editCandidateModal(rowIndex) {
     (isAdmin ? '<div class="form-group"><label class="label">Group</label><input id="edc-group" class="input" value="' + escapeHtml(groupName) + '"></div>' : '') +
     (isAdmin ? '<div class="form-group"><label class="label">Application Status</label><input id="edc-status" class="input" value="' + escapeHtml(statusText) + '"></div>' : '') +
     (isAdmin ? '<div class="form-group"><label class="label">Progress (%)</label><input id="edc-progress" class="input" type="number" step="1" min="0" max="100" value="' + Math.round((parseFloat(row.getAttribute('data-progress')) || 0) * 100) + '"></div>' : '') +
+    (isAdmin ? '<div class="form-group"><label class="label">Filing Status</label><select id="edc-filingStatus" class="select"><option value="">Active</option><option value="Deleted">Deleted</option><option value="Complete">Complete</option></select></div>' : '') +
     '<input type="hidden" id="edc-rowIndex" value="' + rowIndex + '">' +
     '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
     '<button class="btn btn-outline btn-sm" onclick="closeCandidateModal()">Cancel</button>' +
@@ -545,6 +577,7 @@ function saveCandidateEdit() {
     var grp = document.getElementById('edc-group'); if (grp) updates.group = grp.value;
     var st = document.getElementById('edc-status'); if (st) updates.status = st.value;
     var prog = document.getElementById('edc-progress'); if (prog) updates.progress = parseFloat(prog.value) / 100;
+    var fs = document.getElementById('edc-filingStatus'); if (fs && fs.value) updates.filingStatus = fs.value;
   }
 
   google.script.run.withSuccessHandler(function (r) {
@@ -552,6 +585,139 @@ function saveCandidateEdit() {
     closeCandidateModal();
     loadProcessing();
   }).updateCandidate(rowIndex, updates);
+}
+
+function showAddGroupModal() {
+  var html = '<div class="modal-overlay" style="display:flex" id="add-group-overlay" onclick="closeModalById(\'add-group-overlay\', event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+    '<div class="flex-between mb-4"><div class="card-title">Add Group</div>' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Close</button></div>' +
+    '<div class="form-group"><label class="label">Group Name *</label><input id="ag-name" class="input"></div>' +
+    '<div class="form-group"><label class="label">Start Date</label><input id="ag-start" class="input" type="date"></div>' +
+    '<div class="form-group"><label class="label">Main Institution</label><input id="ag-institution" class="input"></div>' +
+    '<div class="form-group"><label class="label">Country</label><select id="ag-country" class="select"><option value="">Select country</option>';
+  COUNTRIES.forEach(function (c) {
+    html += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+  });
+  html += '</select></div>' +
+    '<div class="form-group"><label class="label">Expected End Date</label><input id="ag-end" class="input" type="date"></div>' +
+    '<div class="form-group"><label class="label">Remarks</label><textarea id="ag-remarks" class="input" rows="2"></textarea></div>' +
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="createGroupAction()">Create Group</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function createGroupAction() {
+  var name = document.getElementById('ag-name').value.trim();
+  if (!name) { showToast('Group name required', 'error'); return; }
+  var data = {
+    groupName: name,
+    startDate: document.getElementById('ag-start').value,
+    mainInstitution: document.getElementById('ag-institution').value.trim(),
+    country: document.getElementById('ag-country').value,
+    expectedEndDate: document.getElementById('ag-end').value,
+    remarks: document.getElementById('ag-remarks').value.trim(),
+  };
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('add-group-overlay');
+    showToast('Group created');
+    loadProcessing();
+  }).createGroup(data);
+}
+
+function closeModalById(id, e) {
+  var el = document.getElementById(id);
+  if (el) el.remove();
+  if (e && e.target !== el) return;
+}
+
+function showArchiveGroupModal(groupId, groupName) {
+  var html = '<div class="modal-overlay" style="display:flex" id="archive-group-overlay" onclick="closeModalById(\'archive-group-overlay\', event)"><div class="modal" onclick="event.stopPropagation()">' +
+    '<div class="card-title mb-4">Archive Group</div>' +
+    '<p style="margin-bottom:16px;font-size:14px;color:var(--text)">Archive group <strong>' + escapeHtml(groupName) + '</strong>? The group will be hidden from the processing view.</p>' +
+    '<div class="flex gap-2" style="justify-content:flex-end">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'archive-group-overlay\')">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="confirmArchiveGroup(\'' + escapeHtml(groupId) + '\')">Archive</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmArchiveGroup(groupId) {
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('archive-group-overlay');
+    showToast('Group archived');
+    loadProcessing();
+  }).archiveGroup(groupId);
+}
+
+function showDeleteGroupModal(groupId, groupName) {
+  var html = '<div class="modal-overlay" style="display:flex" id="delete-group-overlay" onclick="closeModalById(\'delete-group-overlay\', event)"><div class="modal" onclick="event.stopPropagation()">' +
+    '<div class="card-title mb-4">Delete Group</div>' +
+    '<p style="margin-bottom:16px;font-size:14px;color:var(--text)">Delete group <strong>' + escapeHtml(groupName) + '</strong>? This will mark the group as deleted.</p>' +
+    '<div class="flex gap-2" style="justify-content:flex-end">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'delete-group-overlay\')">Cancel</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="confirmDeleteGroup(\'' + escapeHtml(groupId) + '\')">Delete</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmDeleteGroup(groupId) {
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('delete-group-overlay');
+    showToast('Group deleted');
+    loadProcessing();
+  }).deleteGroup(groupId);
+}
+
+function showAddCandidateModal(groupName) {
+  var html = '<div class="modal-overlay" style="display:flex" id="add-candidate-overlay" onclick="closeModalById(\'add-candidate-overlay\', event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+    '<div class="flex-between mb-4"><div class="card-title">Add to Group: ' + escapeHtml(groupName) + '</div>' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-candidate-overlay\')">Close</button></div>' +
+    '<div class="form-group"><label class="label">Travel Document No.</label><input id="ac-travel-doc" class="input" placeholder="Enter passport/travel document number"></div>' +
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter the Travel Document No. of an existing candidate to add them to this group.</div>' +
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-candidate-overlay\')">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="confirmAddCandidate(\'' + escapeHtml(groupName) + '\')">Add to Group</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmAddCandidate(groupName) {
+  var travelDoc = document.getElementById('ac-travel-doc').value.trim();
+  if (!travelDoc) { showToast('Travel Document No. required', 'error'); return; }
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('add-candidate-overlay');
+    showToast('Candidate added to group');
+    loadProcessing();
+  }).addCandidateToGroup(travelDoc, groupName);
+}
+
+function showDeleteCandidateModal(rowIndex) {
+  var html = '<div class="modal-overlay" style="display:flex" id="delete-candidate-overlay" onclick="closeModalById(\'delete-candidate-overlay\', event)"><div class="modal" onclick="event.stopPropagation()">' +
+    '<div class="card-title mb-4">Delete Candidate</div>' +
+    '<p style="margin-bottom:16px;font-size:14px;color:var(--text)">Mark this candidate as <strong>Deleted</strong> or <strong>Complete</strong>?</p>' +
+    '<div class="form-group"><label class="label">Status</label>' +
+    '<select id="dc-status" class="select"><option value="Deleted">Deleted</option><option value="Complete">Complete</option></select></div>' +
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'delete-candidate-overlay\')">Cancel</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="confirmDeleteCandidate(' + rowIndex + ')">Confirm</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmDeleteCandidate(rowIndex) {
+  var status = document.getElementById('dc-status').value;
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('delete-candidate-overlay');
+    showToast('Candidate marked as ' + status);
+    loadProcessing();
+  }).updateCandidateFilingStatus(rowIndex, status);
 }
 
 function loadAgents() {
