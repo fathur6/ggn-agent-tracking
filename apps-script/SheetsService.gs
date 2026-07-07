@@ -1,3 +1,16 @@
+function getAppBaseUrl_() {
+  return ScriptApp.getService().getUrl();
+}
+
+function getSheetByName_(spreadsheetId, sheetName) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+  return sheet;
+}
+
 function getSheetData_(spreadsheetId, sheetName) {
   var sheet = getSheetByName_(spreadsheetId, sheetName);
   return sheet.getDataRange().getValues();
