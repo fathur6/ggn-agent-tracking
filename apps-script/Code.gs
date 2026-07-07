@@ -25,6 +25,16 @@ function getMe() {
     var user = getCurrentUser_();
     return { success: true, user: user };
   } catch (e) {
+    var email = '';
+    try { email = Session.getActiveUser().getEmail(); } catch (ex) { /* ignore */ }
+    return { success: false, error: e.message, email: email };
+  }
+}
+
+function getMyEmail() {
+  try {
+    return { success: true, email: Session.getActiveUser().getEmail() };
+  } catch (e) {
     return { success: false, error: e.message };
   }
 }
@@ -603,13 +613,14 @@ function ensureCandidatesHeaders_() {
 
 function ensureGroupsHeaders_() {
   var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+  var headers = ['GroupID','GroupName','AgentName','AgentID','StartDate','MainInstitution','Country','ExpectedEndDate','Remarks','FilingStatus','CreatedAt'];
   var data = sheet.getDataRange().getValues();
-  if (data.length === 0 || !data[0] || data[0][0] !== 'GroupID') {
-    var headers = ['GroupID','GroupName','StartDate','MainInstitution','Country','ExpectedEndDate','Remarks','FilingStatus','CreatedAt'];
-    if (data.length > 0) {
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    } else {
-      sheet.appendRow(headers);
+  if (data.length === 0 || data[0][0] !== 'GroupID') {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else if (data[0].length < headers.length) {
+    // Extend headers if missing columns
+    for (var ci = data[0].length; ci < headers.length; ci++) {
+      sheet.getRange(1, ci + 1).setValue(headers[ci]);
     }
   }
 }
@@ -625,6 +636,8 @@ function createGroup(data) {
     var row = [
       groupId,
       data.groupName,
+      data.agentName || '',
+      data.agentId || '',
       data.startDate || '',
       data.mainInstitution || '',
       data.country || '',
@@ -645,6 +658,110 @@ function getGroups() {
     ensureGroupsHeaders_();
     var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
     return { success: true, groups: groups };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function updateGroup(groupId, data) {
+  try {
+    var user = getCurrentUser_();
+    var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
+    if (!found) throw new Error('Group not found');
+
+    var headers = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Groups')[0];
+    if (user.role !== 'admin') {
+      var agentIdCol = headers.indexOf('AgentID');
+      if (agentIdCol === -1 || (found.rowData[agentIdCol] || '') !== user.agentId) {
+        throw new Error('You can only edit your own groups');
+      }
+    }
+
+    var fieldMap = { mainInstitution: 'MainInstitution', country: 'Country', expectedEndDate: 'ExpectedEndDate', remarks: 'Remarks', filingStatus: 'FilingStatus' };
+    for (var key in data) {
+      if (fieldMap[key] !== undefined) {
+        var col = headers.indexOf(fieldMap[key]);
+        if (col !== -1) updateCell_(CONFIG.PROGRESS_SHEET_ID, 'Groups', found.rowIndex, col, data[key]);
+      }
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function debugCandidateSheet() {
+  try {
+    var user = getCurrentUser_();
+    var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    var data = sheet.getDataRange().getValues();
+    return {
+      success: true,
+      user: { email: user.email, name: user.name, role: user.role, agentId: user.agentId },
+      sheetName: sheet.getName(),
+      rowCount: data.length,
+      colCount: data.length > 0 ? data[0].length : 0,
+      headers: data.length > 0 ? data[0] : [],
+      firstRow: data.length > 1 ? data[1] : [],
+      lastRow: data.length > 1 ? data[data.length - 1] : [],
+    };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function migrateGroupsFromCandidates() {
+  try {
+    var user = getCurrentUser_();
+    if (user.role !== 'admin') throw new Error('Admin only');
+
+    ensureGroupsHeaders_();
+
+    // Get existing group names from Groups sheet
+    var existingGroups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+    var existingNames = {};
+    existingGroups.forEach(function (g) { existingNames[g.GroupName] = true; });
+
+    // Get all candidates and find unique groups with agent info
+    var candidates = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    if (candidates.length <= 1) return { success: true, created: 0, message: 'No candidate data' };
+
+    var headers = candidates[0];
+    var groupCol = headers.indexOf('Group');
+    var agentNameCol = headers.indexOf('AgentName');
+    var agentIdCol = headers.indexOf('AgentID');
+    if (groupCol === -1) throw new Error('Group column not found in Candidate sheet');
+
+    var groupInfo = {};
+    for (var i = 1; i < candidates.length; i++) {
+      var grp = (candidates[i][groupCol] || '').trim();
+      if (!grp) continue;
+      if (!groupInfo[grp]) groupInfo[grp] = { agentNames: {}, agentIds: {} };
+      var aname = agentNameCol >= 0 ? (candidates[i][agentNameCol] || '') : '';
+      var aid = agentIdCol >= 0 ? (candidates[i][agentIdCol] || '') : '';
+      if (aname) groupInfo[grp].agentNames[aname] = (groupInfo[grp].agentNames[aname] || 0) + 1;
+      if (aid) groupInfo[grp].agentIds[aid] = (groupInfo[grp].agentIds[aid] || 0) + 1;
+    }
+
+    var created = 0;
+    for (var groupName in groupInfo) {
+      if (existingNames[groupName]) continue;
+
+      // Pick most common agent name and ID
+      var agentName = '';
+      var agentId = '';
+      var nameEntries = Object.entries(groupInfo[groupName].agentNames).sort(function (a, b) { return b[1] - a[1]; });
+      if (nameEntries.length > 0) agentName = nameEntries[0][0];
+      var idEntries = Object.entries(groupInfo[groupName].agentIds).sort(function (a, b) { return b[1] - a[1]; });
+      if (idEntries.length > 0) agentId = idEntries[0][0];
+
+      var groupId = 'GRP' + Utilities.getUuid().slice(0, 8).toUpperCase();
+      var row = [groupId, groupName, agentName, agentId, '', '', '', '', 'Migrated from candidates', 'Active', new Date().toISOString()];
+      appendRow_(CONFIG.PROGRESS_SHEET_ID, 'Groups', row);
+      created++;
+    }
+
+    return { success: true, created: created, total: Object.keys(groupInfo).length };
   } catch (e) {
     return { success: false, error: e.message };
   }

@@ -121,7 +121,15 @@ function initApp() {
         hideLoadingOverlay();
       } else {
         hideLoadingOverlay();
-        document.getElementById('login-error').textContent = result.error || 'Authentication failed';
+        var credEl = document.getElementById('login-credential');
+        if (result.email) {
+          credEl.style.display = 'block';
+          credEl.innerHTML = '<div class="cred-label">Detected credential</div><div class="cred-email">' + escapeHtml(result.email) + '</div>';
+        }
+        var isUnregistered = result.error && result.error.indexOf('not registered') !== -1;
+        document.getElementById('login-error').innerHTML = isUnregistered
+          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:support@example.com">support@example.com</a> to request access.'
+          : escapeHtml(result.error || 'Authentication failed');
       }
     })
     .withFailureHandler(function () {
@@ -159,6 +167,11 @@ function loadDashboard() {
       '<div class="stat-card"><div class="stat-label">Agreed</div><div class="stat-value">' + s.accepted + '</div></div>' +
       '<div class="stat-card"><div class="stat-label">Enrolled</div><div class="stat-value">' + s.enrolled + '</div></div>' +
       '<div class="stat-card"><div class="stat-label">Conversion</div><div class="stat-value">' + s.conversionRate + '%</div></div>' +
+    '</div>' +
+    '<div class="stat-grid stat-grid-3" style="margin-top:12px">' +
+      '<div class="stat-card"><div class="stat-label">Groups</div><div class="stat-value">' + (s.groupsCount || 0) + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">eVAL Approved</div><div class="stat-value">' + (s.evalApproved || 0) + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Under Processing</div><div class="stat-value">' + (s.underProcessing || 0) + '</div></div>' +
     '</div>';
 
     var byAgentRows = s.byAgent || [];
@@ -366,6 +379,8 @@ function loadProcessing() {
   if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
+    console.log('DEBUG: candidates received =', result.candidates ? result.candidates.length : 0);
+    google.script.run.withSuccessHandler(function (debug) { console.log('DEBUG sheet:', JSON.stringify(debug)); }).debugCandidateSheet();
     renderProcessing(result.candidates);
     google.script.run.withSuccessHandler(function (sched) {
       var countEl = document.getElementById('emgs-countdown');
@@ -410,11 +425,14 @@ function emgsStatusBadge_(status) {
   return '<span class="badge ' + cls + '">' + escapeHtml(status) + '</span>';
 }
 
+var _processingGroupsCache = [];
+
 function renderProcessing(candidates) {
   var el = document.getElementById('processing-content');
   var _this = this;
   google.script.run.withSuccessHandler(function (groupsResult) {
     var groups = groupsResult.success ? (groupsResult.groups || []) : [];
+    _processingGroupsCache = groups;
     var byAgent = {};
     candidates.forEach(function (c) {
       var agentName = c['AgentName'] || 'Unknown';
@@ -425,7 +443,7 @@ function renderProcessing(candidates) {
     });
 
     var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
-      (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="showAddGroupModal()">Add Group</button><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
+      (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="showAddGroupModal()">Add Group</button><button class="btn btn-outline btn-sm" onclick="migrateCandidateGroups()">Migrate Groups</button><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
       '</div>';
     var agentNames = Object.keys(byAgent).sort();
     if (agentNames.length === 0) {
@@ -452,16 +470,19 @@ function renderProcessing(candidates) {
         html += '<div class="processing-group-section" data-group="' + escapeHtml(groupName) + '">' +
           '<div class="flex-between" style="margin-bottom:10px">' +
           '<div class="processing-group-title">' + escapeHtml(groupName) + ' (' + agentGroups[groupName].length + ')</div>' +
-          (isAdmin && groupId ? '<div class="flex gap-2">' +
-            '<button class="btn-icon" onclick="showArchiveGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Archive group">' +
+          (groupId ? '<div class="flex gap-2">' +
+            (isAdmin || groupObj.AgentID === CURRENT_USER.agentId ? '<button class="btn-icon" onclick="showEditGroupModal(\'' + escapeHtml(groupId) + '\')" title="Edit group">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
+            '</button>' : '') +
+            (isAdmin ? '<button class="btn-icon" onclick="showArchiveGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Archive group">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>' +
-            '</button>' +
-            '<button class="btn-icon del-btn-icon" onclick="showDeleteGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Delete group">' +
+            '</button>' : '') +
+            (isAdmin ? '<button class="btn-icon del-btn-icon" onclick="showDeleteGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Delete group">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>' +
-            '</button>' +
-            '<button class="btn-icon" onclick="showAddCandidateModal(\'' + escapeHtml(groupName) + '\')" title="Add candidate to group">' +
+            '</button>' : '') +
+            (isAdmin ? '<button class="btn-icon" onclick="showAddCandidateModal(\'' + escapeHtml(groupName) + '\')" title="Add candidate to group">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
-            '</button>' +
+            '</button>' : '') +
           '</div>' : '') +
           '</div>' +
           '<div class="table-wrap"><table><thead><tr>' +
@@ -588,31 +609,68 @@ function saveCandidateEdit() {
 }
 
 function showAddGroupModal() {
-  var html = '<div class="modal-overlay" style="display:flex" id="add-group-overlay" onclick="closeModalById(\'add-group-overlay\', event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
-    '<div class="flex-between mb-4"><div class="card-title">Add Group</div>' +
-    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Close</button></div>' +
-    '<div class="form-group"><label class="label">Group Name *</label><input id="ag-name" class="input"></div>' +
-    '<div class="form-group"><label class="label">Start Date</label><input id="ag-start" class="input" type="date"></div>' +
-    '<div class="form-group"><label class="label">Main Institution</label><input id="ag-institution" class="input"></div>' +
-    '<div class="form-group"><label class="label">Country</label><select id="ag-country" class="select"><option value="">Select country</option>';
-  COUNTRIES.forEach(function (c) {
-    html += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
-  });
-  html += '</select></div>' +
-    '<div class="form-group"><label class="label">Expected End Date</label><input id="ag-end" class="input" type="date"></div>' +
-    '<div class="form-group"><label class="label">Remarks</label><textarea id="ag-remarks" class="input" rows="2"></textarea></div>' +
-    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
-    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Cancel</button>' +
-    '<button class="btn btn-primary btn-sm" onclick="createGroupAction()">Create Group</button></div>' +
-    '</div></div>';
-  document.body.insertAdjacentHTML('beforeend', html);
+  var isAdmin = CURRENT_USER.role === 'admin';
+  function buildModal(agents) {
+    var html = '<div class="modal-overlay" style="display:flex" id="add-group-overlay" onclick="closeModalById(\'add-group-overlay\', event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+      '<div class="flex-between mb-4"><div class="card-title">Add Group</div>' +
+      '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Close</button></div>' +
+      '<div class="card" style="padding:12px;margin-bottom:16px;background:var(--surface2)">' +
+      '<div class="card-title" style="font-size:13px;margin-bottom:8px;color:var(--text)">Agent Information</div>';
+    if (isAdmin && agents) {
+      html += '<div class="form-group"><label class="label">Agent Name</label><select id="ag-agent" class="select" onchange="updateAgentIdFromName()">' +
+        '<option value="">Select agent</option>';
+      agents.forEach(function (a) {
+        html += '<option value="' + escapeHtml(a.AgentID) + '">' + escapeHtml(a.Name) + '</option>';
+      });
+      html += '</select></div>' +
+        '<div class="form-group"><label class="label">Agent ID</label><input id="ag-agent-id" class="input" readonly></div>';
+    } else {
+      html += '<div class="form-group"><label class="label">Agent Name</label><input class="input" readonly value="' + escapeHtml(CURRENT_USER.name) + '"></div>' +
+        '<div class="form-group"><label class="label">Agent ID</label><input class="input" readonly value="' + escapeHtml(CURRENT_USER.agentId) + '"></div>';
+    }
+    html += '</div>' +
+      '<div class="form-group"><label class="label">Group Name *</label><input id="ag-name" class="input"></div>' +
+      '<div class="form-group"><label class="label">Start Date</label><input id="ag-start" class="input" type="date"></div>' +
+      '<div class="form-group"><label class="label">Main Institution</label><input id="ag-institution" class="input"></div>' +
+      '<div class="form-group"><label class="label">Country</label><select id="ag-country" class="select"><option value="">Select country</option>';
+    COUNTRIES.forEach(function (c) {
+      html += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+    });
+    html += '</select></div>' +
+      '<div class="form-group"><label class="label">Expected End Date</label><input id="ag-end" class="input" type="date"></div>' +
+      '<div class="form-group"><label class="label">Remarks</label><textarea id="ag-remarks" class="input" rows="2"></textarea></div>' +
+      '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+      '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'add-group-overlay\')">Cancel</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="createGroupAction()">Create Group</button></div>' +
+      '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+  if (isAdmin) {
+    google.script.run.withSuccessHandler(function (result) {
+      buildModal(result.success ? result.agents : []);
+    }).getAgents();
+  } else {
+    buildModal(null);
+  }
 }
 
 function createGroupAction() {
+  var isAdmin = CURRENT_USER.role === 'admin';
   var name = document.getElementById('ag-name').value.trim();
   if (!name) { showToast('Group name required', 'error'); return; }
+  var agentName, agentId;
+  if (isAdmin) {
+    var sel = document.getElementById('ag-agent');
+    agentName = sel ? sel.options[sel.selectedIndex].text : '';
+    agentId = sel ? sel.value : '';
+  } else {
+    agentName = CURRENT_USER.name;
+    agentId = CURRENT_USER.agentId;
+  }
   var data = {
     groupName: name,
+    agentName: agentName,
+    agentId: agentId,
     startDate: document.getElementById('ag-start').value,
     mainInstitution: document.getElementById('ag-institution').value.trim(),
     country: document.getElementById('ag-country').value,
@@ -625,6 +683,64 @@ function createGroupAction() {
     showToast('Group created');
     loadProcessing();
   }).createGroup(data);
+}
+
+function migrateCandidateGroups() {
+  var confirmed = confirm('Scan Candidate sheet for groups not yet in Groups sheet and create them?');
+  if (!confirmed) return;
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    showToast('Groups migrated: ' + r.created + ' created out of ' + r.total + ' found');
+    loadProcessing();
+  }).migrateGroupsFromCandidates();
+}
+
+function updateAgentIdFromName() {
+  var sel = document.getElementById('ag-agent');
+  document.getElementById('ag-agent-id').value = sel ? sel.value : '';
+}
+
+function showEditGroupModal(groupId) {
+  var group = null;
+  for (var gi = 0; gi < _processingGroupsCache.length; gi++) {
+    if (_processingGroupsCache[gi].GroupID === groupId) { group = _processingGroupsCache[gi]; break; }
+  }
+  if (!group) { showToast('Group not found', 'error'); return; }
+  var html = '<div class="modal-overlay" style="display:flex" id="edit-group-overlay" onclick="closeModalById(\'edit-group-overlay\', event)"><div class="modal lead-modal" onclick="event.stopPropagation()">' +
+    '<div class="flex-between mb-4"><div class="card-title">Edit Group</div>' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'edit-group-overlay\')">Close</button></div>' +
+    '<div style="margin-bottom:12px;padding:8px 12px;background:var(--surface2);border-radius:6px;font-size:12px;color:var(--text-muted)">' +
+    'Group: <strong>' + escapeHtml(group.GroupName) + '</strong> &middot; Agent: ' + escapeHtml(group.AgentName || '') + ' (' + escapeHtml(group.AgentID || '') + ')</div>' +
+    '<div class="form-group"><label class="label">Main Institution</label><input id="eg-mainInstitution" class="input" value="' + escapeHtml(group.MainInstitution || '') + '"></div>' +
+    '<div class="form-group"><label class="label">Country</label><input id="eg-country" class="input" value="' + escapeHtml(group.Country || '') + '"></div>' +
+    '<div class="form-group"><label class="label">Expected End Date</label><input id="eg-expectedEndDate" class="input" type="date" value="' + escapeHtml(group.ExpectedEndDate || '') + '"></div>' +
+    '<div class="form-group"><label class="label">Remarks</label><textarea id="eg-remarks" class="input" rows="2">' + escapeHtml(group.Remarks || '') + '</textarea></div>' +
+    '<div class="form-group"><label class="label">Filing Status</label><select id="eg-filingStatus" class="select">' +
+      '<option value="Active"' + (group.FilingStatus === 'Active' ? ' selected' : '') + '>Active</option>' +
+      '<option value="Archived"' + (group.FilingStatus === 'Archived' ? ' selected' : '') + '>Archived</option>' +
+      '<option value="Deleted"' + (group.FilingStatus === 'Deleted' ? ' selected' : '') + '>Deleted</option>' +
+    '</select></div>' +
+    '<div class="flex gap-2" style="justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-outline btn-sm" onclick="closeModalById(\'edit-group-overlay\')">Cancel</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="saveEditGroup(\'' + escapeHtml(groupId) + '\')">Save</button></div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function saveEditGroup(groupId) {
+  var data = {
+    mainInstitution: document.getElementById('eg-mainInstitution').value.trim(),
+    country: document.getElementById('eg-country').value.trim(),
+    expectedEndDate: document.getElementById('eg-expectedEndDate').value,
+    remarks: document.getElementById('eg-remarks').value.trim(),
+    filingStatus: document.getElementById('eg-filingStatus').value,
+  };
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.success) { showToast(r.error, 'error'); return; }
+    closeModalById('edit-group-overlay');
+    showToast('Group updated');
+    loadProcessing();
+  }).updateGroup(groupId, data);
 }
 
 function closeModalById(id, e) {

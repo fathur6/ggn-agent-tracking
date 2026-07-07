@@ -49,14 +49,36 @@ function getDashboardSummary_(agentIdFilter) {
       };
     });
 
+  var processingStats = getProcessingStats_(user);
   return {
     totalLeads: totalLeads,
     offersSent: offersSent,
     accepted: accepted,
     enrolled: enrolled,
     conversionRate: conversionRate,
+    groupsCount: processingStats.groupsCount,
+    evalApproved: processingStats.evalApproved,
+    underProcessing: processingStats.underProcessing,
     byAgent: Object.values(byAgent),
     byStatus: byStatus,
     recentActivity: recentActivity,
   };
+}
+
+function getProcessingStats_(user) {
+  var stats = { groupsCount: 0, evalApproved: 0, underProcessing: 0 };
+  try {
+    var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+    stats.groupsCount = groups.filter(function(g) { return g.FilingStatus === 'Active'; }).length;
+  } catch (e) { /* ignore */ }
+  try {
+    var candidates = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    candidates.forEach(function (c) {
+      if (user.role === 'agent' && (c.AgentID || '') !== user.agentId) return;
+      var progress = parseFloat(c['Progress (%)'] || 0);
+      if (progress > 0.35) stats.evalApproved++;
+      if (progress > 0 && progress < 0.80) stats.underProcessing++;
+    });
+  } catch (e) { /* ignore */ }
+  return stats;
 }

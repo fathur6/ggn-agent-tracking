@@ -6,9 +6,9 @@ var CONFIG = {
   OFFER_TEMPLATE_DOC_ID: 'YOUR_GOOGLE_DOC_TEMPLATE_ID',
   OFFER_OUTPUT_FOLDER_ID: 'YOUR_GOOGLE_DRIVE_FOLDER_ID',
   GOOGLE_CLIENT_ID: '',
-  EMAIL_FROM: 'pps@unisza.edu.my',
-  EMAIL_CC: 'pps_gs-student-affair@unisza.edu.my',
-  EMAIL_REPLY_TO: 'pps_gs-student-affair@unisza.edu.my',
+  EMAIL_FROM: 'your-email@example.com',
+  EMAIL_CC: 'your-email@example.com',
+  EMAIL_REPLY_TO: 'your-email@example.com',
 };
 
 function getAppBaseUrl_() {
