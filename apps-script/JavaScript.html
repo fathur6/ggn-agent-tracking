@@ -125,7 +125,7 @@ function initApp() {
         hideLoadingOverlay();
         var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
         if (isNotAuthed) {
-          document.getElementById('login-page').style.display = 'block';
+          document.getElementById('login-page').style.display = 'flex';
           document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
             '<p style="margin-bottom:12px;font-size:13px;color:var(--text2)">Please enter the email address registered with your agent account to log in.</p>' +
             '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
@@ -181,7 +181,7 @@ function logout() {
   CURRENT_USER = null;
   try { localStorage.removeItem('ugs-user'); } catch(ex) {}
   document.getElementById('app-shell').style.display = 'none';
-  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('login-page').style.display = 'flex';
   document.getElementById('login-error').textContent = '';
   initApp();
 }
