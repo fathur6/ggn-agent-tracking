@@ -9,6 +9,10 @@ function getCurrentUser_(optEmail) {
   return user;
 }
 
+function getGoogleClientId() {
+  return CONFIG.GOOGLE_CLIENT_ID || '';
+}
+
 function getSessionEmail() {
   try { return Session.getActiveUser().getEmail() || ''; } catch (ex) { return ''; }
 }

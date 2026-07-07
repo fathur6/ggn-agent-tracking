@@ -110,6 +110,30 @@ function statusBadge(status) {
   return '<span class="badge ' + cls + '">' + escapeHtml(s) + '</span>';
 }
 
+function handleGisLogin(googleEmail) {
+  showLoadingOverlay();
+  google.script.run.withSuccessHandler(function (result) {
+    hideLoadingOverlay();
+    if (result && result.email) {
+      CURRENT_USER = result;
+      try { localStorage.setItem('ugs-user', JSON.stringify(result)); } catch(ex) {}
+      document.getElementById('login-page').style.display = 'none';
+      document.getElementById('app-shell').style.display = 'flex';
+      renderUserInfo();
+      navigate('dashboard');
+    } else {
+      document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
+        '<p style="color:var(--danger);margin-bottom:8px">' + escapeHtml((result && result.error) || 'Login failed') + '</p>' +
+        '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
+        '<button class="btn btn-primary" onclick="loginAction()" style="width:100%">Log In</button>' +
+        '</div>';
+    }
+  }).withFailureHandler(function () {
+    hideLoadingOverlay();
+    document.getElementById('login-error').textContent = 'Unable to connect to server';
+  }).verifySessionEmailAndLogin(googleEmail);
+}
+
 function initApp() {
   showLoadingOverlay();
   google.script.run
@@ -126,22 +150,43 @@ function initApp() {
         var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
         if (isNotAuthed) {
           document.getElementById('login-page').style.display = 'flex';
-          document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
+          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
             '<div id="detected-credential" style="display:none"></div>' +
-            '<p style="margin-bottom:12px;font-size:13px;color:var(--text2)">Please enter the email address registered with your agent account to log in.</p>' +
-            '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
+            '<div id="gis-button" style="margin-bottom:12px"></div>' +
+            '<div style="position:relative;text-align:center;margin-bottom:12px"><span style="background:var(--bg1);padding:0 10px;font-size:12px;color:var(--text2);position:relative;z-index:1">or sign in with email</span><hr style="border:none;border-top:1px solid var(--border);margin:-7px 0 0 0"></div>' +
+            '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:8px">' +
             '<button class="btn btn-primary" onclick="loginAction()" style="width:100%">Log In</button>' +
             '</div>';
-          google.script.run.withSuccessHandler(function(sessionEmail) {
-            var el = document.getElementById('detected-credential');
-            if (sessionEmail) {
-              el.style.display = 'block';
-              el.innerHTML = '<div class="cred-label">Signed in with</div><div class="cred-email">' + escapeHtml(sessionEmail) + '</div>';
-            } else if (sessionEmail === '') {
-              el.style.display = 'block';
-              el.innerHTML = '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg1)">Your Google session was detected, but your email could not be verified automatically. Make sure you enter the <strong>exact email</strong> registered with your agent account.</div>';
+          google.script.run.withSuccessHandler(function(clientId) {
+            if (clientId && window.google && google.accounts) {
+              google.accounts.id.initialize({
+                client_id: clientId,
+                callback: function (response) {
+                  if (response.credential) {
+                    try {
+                      var parts = response.credential.split('.');
+                      var payload = JSON.parse(atob(parts[1]));
+                      if (payload.email) handleGisLogin(payload.email);
+                      else showToast('Unable to read Google email', 'error');
+                    } catch(ex) {
+                      showToast('Invalid Google credential', 'error');
+                    }
+                  }
+                },
+                cancel_on_tap_outside: false
+              });
+              google.accounts.id.renderButton(document.getElementById('gis-button'), {
+                theme: 'outline', size: 'large', width: 280, text: 'signin_with'
+              });
             }
-          }).getSessionEmail();
+            google.script.run.withSuccessHandler(function(sessionEmail) {
+              var el = document.getElementById('detected-credential');
+              if (sessionEmail) {
+                el.style.display = 'block';
+                el.innerHTML = '<div class="cred-label">Google session detected</div><div class="cred-email">' + escapeHtml(sessionEmail) + '</div>';
+              }
+            }).getSessionEmail();
+          }).getGoogleClientId();
           return;
         }
         var credEl = document.getElementById('login-credential');

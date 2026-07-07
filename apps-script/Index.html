@@ -4,6 +4,7 @@
   <base target="_top">
   <?!= include('Styles') ?>
   <title>Agent & Prospect Tracking</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay">
@@ -86,6 +87,7 @@
     <h1>UniSZA Graduate School</h1>
     <div class="subtitle">Agent Management Portal</div>
     <div id="login-credential" class="login-credential" style="display:none"></div>
+    <div id="g_id_onload" style="margin-bottom:12px;display:none"></div>
     <div id="login-error" class="login-error"></div>
   </div>
 </div>
