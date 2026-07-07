@@ -178,7 +178,7 @@ function initApp() {
         }
         var isUnregistered = result.error && result.error.indexOf('not registered') !== -1;
         document.getElementById('login-error').innerHTML = isUnregistered
-          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:your-admin@example.com">your-admin@example.com</a> to request access.'
+          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:pps@unisza.edu.my">pps@unisza.edu.my</a> to request access.'
           : escapeHtml(result.error || 'Authentication failed');
       }
     })
