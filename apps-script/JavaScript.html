@@ -478,9 +478,17 @@ function emgsStatusBadge_(status) {
 
 var _processingGroupsCache = [];
 
+function toggleGroupTable(id) {
+  var body = document.getElementById(id);
+  if (!body) return;
+  var isHidden = body.style.display === 'none' || body.style.display === '';
+  body.style.display = isHidden ? 'block' : 'none';
+  var chevron = body.parentNode.querySelector('.proc-group-chevron');
+  if (chevron) chevron.textContent = isHidden ? '▲' : '▼';
+}
+
 function renderProcessing(candidates) {
   var el = document.getElementById('processing-content');
-  var _this = this;
   google.script.run.withSuccessHandler(function (groupsResult) {
     var groups = groupsResult.success ? (groupsResult.groups || []) : [];
     _processingGroupsCache = groups;
@@ -495,6 +503,7 @@ function renderProcessing(candidates) {
 
     var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
       (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="showAddGroupModal()">Add Group</button><button class="btn btn-outline btn-sm" onclick="migrateCandidateGroups()">Migrate Groups</button><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
+      '<div class="proc-table-header"><span>Group Name</span><span>Candidates</span><span>Under Processing</span><span>eVAL Approved</span><span></span><span></span></div>' +
       '</div>';
     var agentNames = Object.keys(byAgent).sort();
     if (agentNames.length === 0) {
@@ -518,34 +527,44 @@ function renderProcessing(candidates) {
         }
         var groupId = groupObj ? groupObj.GroupID : '';
         var isAdmin = CURRENT_USER.role === 'admin';
-        html += '<div class="processing-group-section" data-group="' + escapeHtml(groupName) + '">' +
-          '<div class="flex-between" style="margin-bottom:10px">' +
-          '<div class="processing-group-title">' + escapeHtml(groupName) + ' (' + agentGroups[groupName].length + ')</div>' +
-          (groupId ? '<div class="flex gap-2">' +
-            (isAdmin || groupObj.AgentID === CURRENT_USER.agentId ? '<button class="btn-icon" onclick="showEditGroupModal(\'' + escapeHtml(groupId) + '\')" title="Edit group">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>' +
-            '</button>' : '') +
-            (isAdmin ? '<button class="btn-icon" onclick="showArchiveGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Archive group">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>' +
-            '</button>' : '') +
-            (isAdmin ? '<button class="btn-icon del-btn-icon" onclick="showDeleteGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Delete group">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>' +
-            '</button>' : '') +
-            (isAdmin ? '<button class="btn-icon" onclick="showAddCandidateModal(\'' + escapeHtml(groupName) + '\')" title="Add candidate to group">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
-            '</button>' : '') +
-          '</div>' : '') +
+        var candidatesInGroup = agentGroups[groupName];
+        var totalCount = candidatesInGroup.length;
+        var evalApprovedCount = 0;
+        var underProcessingCount = 0;
+        candidatesInGroup.forEach(function (r) {
+          var rawProgress = parseFloat(r['Progress (%)'] || r['Application Progress (%)'] || 0);
+          var filingStatus = r['FilingStatus'] || '';
+          if (filingStatus === 'Deleted' || filingStatus === 'Complete') return;
+          if (rawProgress > 0.35) { evalApprovedCount++; }
+          else { underProcessingCount++; }
+        });
+        var sectionId = 'grp-' + groupName.replace(/[^a-zA-Z0-9]/g, '') + '-' + agentName.replace(/[^a-zA-Z0-9]/g, '') + '-' + totalCount + '-' + Math.random().toString(36).substr(2, 4);
+
+        html += '<div class="proc-group-row" data-group="' + escapeHtml(groupName) + '">' +
+          '<div class="proc-group-header" onclick="toggleGroupTable(\'' + sectionId + '\')">' +
+          '<div class="proc-group-name">' + escapeHtml(groupName) + '</div>' +
+          '<div class="proc-group-stat">' + totalCount + '</div>' +
+          '<div class="proc-group-stat">' + underProcessingCount + '</div>' +
+          '<div class="proc-group-stat proc-stat-eval">' + evalApprovedCount + '</div>' +
+          '<div class="proc-group-actions">' +
+            (groupId ? '' +
+              (isAdmin || groupObj.AgentID === CURRENT_USER.agentId ? '<button class="btn-icon" onclick="event.stopPropagation();showEditGroupModal(\'' + escapeHtml(groupId) + '\')" title="Edit group">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>' : '') +
+              (isAdmin ? '<button class="btn-icon" onclick="event.stopPropagation();showArchiveGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Archive group">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></button>' : '') +
+              (isAdmin ? '<button class="btn-icon del-btn-icon" onclick="event.stopPropagation();showDeleteGroupModal(\'' + escapeHtml(groupId) + '\', \'' + escapeHtml(groupName) + '\')" title="Delete group">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>' : '') +
+              (isAdmin ? '<button class="btn-icon" onclick="event.stopPropagation();showAddCandidateModal(\'' + escapeHtml(groupName) + '\')" title="Add candidate">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>' : '') +
+            '' : '') +
           '</div>' +
+          '<span class="proc-group-chevron">▼</span>' +
+          '</div>' +
+          '<div class="proc-group-body" id="' + sectionId + '" style="display:none">' +
           '<div class="table-wrap"><table><thead><tr>' +
-          '<th>Full Name</th>' +
-          '<th>Travel Document</th>' +
-          '<th>Nationality</th>' +
-          '<th>App No</th>' +
-          '<th>Status</th>' +
-          '<th>Progress</th>' +
-          '<th style="width:100px">Action</th>' +
+          '<th>Full Name</th><th>Travel Document</th><th>Nationality</th><th>App No</th><th>Status</th><th>Progress</th><th style="width:100px">Action</th>' +
           '</tr></thead><tbody>';
-        agentGroups[groupName].forEach(function (r) {
+        candidatesInGroup.forEach(function (r) {
           var rawProgress = parseFloat(r['Progress (%)'] || r['Application Progress (%)'] || 0);
           var progressText = (isNaN(rawProgress) ? 0 : Math.round(rawProgress * 100)) + '%';
           var emgsStatus_ = getEmgsStatus_(rawProgress);
@@ -568,7 +587,7 @@ function renderProcessing(candidates) {
             '</td>' +
             '</tr>';
         });
-        html += '</tbody></table></div></div>';
+        html += '</tbody></table></div></div></div>';
       });
       html += '</div>';
     });
