@@ -12,7 +12,7 @@ function getCurrentUser_(optEmail) {
 function getGoogleOAuthUrl() {
   var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
   if (!clientId) return '';
-  var redirectUri = ScriptApp.getService().getUrl();
+  var redirectUri = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
   var state = Utilities.getUuid();
   var cache = CacheService.getScriptCache();
   cache.put('oauth_state_' + state, 'pending', 600);
@@ -33,7 +33,7 @@ function handleOAuthCode_(code, state) {
   cache.remove(stateKey);
   var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
   var clientSecret = CONFIG.GOOGLE_CLIENT_SECRET || '';
-  var redirectUri = ScriptApp.getService().getUrl();
+  var redirectUri = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
   var tokenPayload = {
     code: code,
     client_id: clientId,
