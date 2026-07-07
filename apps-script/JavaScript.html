@@ -503,7 +503,6 @@ function renderProcessing(candidates) {
 
     var html = '<div class="flex-between mb-4"><div class="card-title">Processing (' + candidates.length + ')</div>' +
       (CURRENT_USER.role === 'admin' ? '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="showAddGroupModal()">Add Group</button><button class="btn btn-outline btn-sm" onclick="migrateCandidateGroups()">Migrate Groups</button><button class="btn btn-outline btn-sm" onclick="setupEmgsSchedule()">Setup Schedule</button><button class="btn btn-primary btn-sm" id="emgs-check-btn" onclick="runEmgsCheck()">Check EMGS</button></div><div id="emgs-countdown" class="text-muted" style="font-size:11px;display:none"></div></div>' : '') +
-      '<div class="proc-table-header"><span>Group Name</span><span>Candidates</span><span>Under Processing</span><span>eVAL Approved</span><span></span><span></span></div>' +
       '</div>';
     var agentNames = Object.keys(byAgent).sort();
     if (agentNames.length === 0) {
@@ -514,7 +513,8 @@ function renderProcessing(candidates) {
 
     agentNames.forEach(function (agentName) {
       html += '<div class="card processing-agent-card">' +
-        '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>';
+        '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>' +
+        '<div class="proc-table-header"><span>Group Name</span><span>Candidates</span><span>Under Processing</span><span>eVAL Approved</span><span></span><span></span></div>';
       var agentGroups = byAgent[agentName];
       var groupNames = Object.keys(agentGroups).sort();
       groupNames.forEach(function (groupName) {
