@@ -1,0 +1,6 @@
+{
+  "runtime": "opencode",
+  "graphify": {
+    "enabled": true
+  }
+}

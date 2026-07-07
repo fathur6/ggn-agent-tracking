@@ -9,8 +9,66 @@ function getCurrentUser_(optEmail) {
   return user;
 }
 
-function getGoogleClientId() {
-  return CONFIG.GOOGLE_CLIENT_ID || '';
+function getGoogleOAuthUrl() {
+  var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
+  if (!clientId) return '';
+  var redirectUri = ScriptApp.getService().getUrl();
+  var state = Utilities.getUuid();
+  var cache = CacheService.getScriptCache();
+  cache.put('oauth_state_' + state, 'pending', 600);
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' +
+    'client_id=' + encodeURIComponent(clientId) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent('openid email') +
+    '&state=' + encodeURIComponent(state) +
+    '&prompt=select_account';
+}
+
+function handleOAuthCode_(code, state) {
+  var cache = CacheService.getScriptCache();
+  var stateKey = 'oauth_state_' + state;
+  var stored = cache.get(stateKey);
+  if (!stored) throw new Error('Invalid or expired OAuth state');
+  cache.remove(stateKey);
+  var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
+  var clientSecret = CONFIG.GOOGLE_CLIENT_SECRET || '';
+  var redirectUri = ScriptApp.getService().getUrl();
+  var tokenPayload = {
+    code: code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code'
+  };
+  var options = {
+    method: 'post',
+    payload: tokenPayload,
+    muteHttpExceptions: true
+  };
+  var response = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', options);
+  var result = JSON.parse(response.getContentText());
+  if (!result.id_token) throw new Error('OAuth failed: ' + JSON.stringify(result));
+  var parts = result.id_token.split('.');
+  var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  var payload = JSON.parse(Utilities.newBlob(Utilities.base64Decode(b64)).getDataAsString());
+  if (!payload.email) throw new Error('No email in OAuth response');
+  if (!payload.email_verified) throw new Error('Email not verified by Google');
+  var user = lookupUser_(payload.email);
+  if (!user) throw new Error('Your email is not registered in the system: ' + payload.email);
+  var sessionToken = Utilities.getUuid();
+  cache.put('oauth_session_' + sessionToken, payload.email, 86400);
+  return sessionToken;
+}
+
+function resolveSessionToken_(token) {
+  if (!token) return null;
+  var cache = CacheService.getScriptCache();
+  var email = cache.get('oauth_session_' + token);
+  if (!email) return null;
+  var user = lookupUser_(email);
+  if (!user) return null;
+  return user;
 }
 
 function getSessionEmail() {

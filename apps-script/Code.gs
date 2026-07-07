@@ -9,7 +9,40 @@ function doGet(e) {
       .setTitle('UniSZA Application')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return HtmlService.createTemplateFromFile('Index')
+  var code = e && e.parameter && e.parameter.code;
+  var state = e && e.parameter && e.parameter.state;
+  if (code && state) {
+    try {
+      var sessionToken = handleOAuthCode_(code, state);
+      var baseUrl = ScriptApp.getService().getUrl();
+      return HtmlService.createHtmlOutput(
+        '<script>window.top.location.href="' + baseUrl.replace(/"/g, '&quot;') + '?session=' + encodeURIComponent(sessionToken) + '";</script>'
+      ).setTitle('Redirecting...');
+    } catch (err) {
+      var baseUrl = ScriptApp.getService().getUrl();
+      return HtmlService.createHtmlOutput(
+        '<script>window.top.location.href="' + baseUrl.replace(/"/g, '&quot;') + '?error=' + encodeURIComponent(err.message) + '";</script>'
+      ).setTitle('Redirecting...');
+    }
+  }
+  var sess = e && e.parameter && e.parameter.session;
+  if (sess) {
+    var sessUser = resolveSessionToken_(sess);
+    var template = HtmlService.createTemplateFromFile('Index');
+    template.sessionEmail = sessUser ? sessUser.email : '';
+    template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
+    return template
+      .evaluate()
+      .setTitle('UGS Agent Tracking')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+  var errMsg = e && e.parameter && e.parameter.error;
+  var template = HtmlService.createTemplateFromFile('Index');
+  template.sessionEmail = '';
+  template.sessionUser = '';
+  template.oauthError = errMsg || '';
+  return template
     .evaluate()
     .setTitle('UGS Agent Tracking')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
