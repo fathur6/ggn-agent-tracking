@@ -1,5 +1,5 @@
-function getDashboardSummary_(agentIdFilter) {
-  var user = getCurrentUser_();
+function getDashboardSummary_(agentIdFilter, userEmail) {
+  var user = getCurrentUser_(userEmail);
 
   var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
 

@@ -20,9 +20,9 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-function getMe() {
+function getMe(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     return { success: true, user: user };
   } catch (e) {
     var email = '';
@@ -39,9 +39,9 @@ function getMyEmail() {
   }
 }
 
-function getAgents() {
+function getAgents(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var data = getSheetObjects_(CONFIG.AGENTS_SHEET_ID, 'Agents');
     return { success: true, agents: data };
@@ -50,9 +50,9 @@ function getAgents() {
   }
 }
 
-function createAgent(agentData) {
+function createAgent(agentData, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     if (!agentData.name || !agentData.email) throw new Error('Name and email required');
 
@@ -80,9 +80,9 @@ function createAgent(agentData) {
   }
 }
 
-function updateAgent(agentId, updates) {
+function updateAgent(agentId, updates, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
 
     var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
@@ -111,9 +111,9 @@ function updateAgent(agentId, updates) {
   }
 }
 
-function deleteAgent(agentId) {
+function deleteAgent(agentId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     
     var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
@@ -155,9 +155,9 @@ function getAgentNameMap_() {
   return map;
 }
 
-function getLeads(filters) {
+function getLeads(filters, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var agentNameMap = getAgentNameMap_();
 
@@ -204,9 +204,9 @@ function getLeads(filters) {
   }
 }
 
-function getLead(appId) {
+function getLead(appId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var found = findRowByColumn_(CONFIG.LEADS_SHEET_ID, 'Leads', 'Reference', appId);
     if (!found) throw new Error('Lead not found');
     
@@ -224,11 +224,11 @@ function getLead(appId) {
   }
 }
 
-function updateLead(appId, updates) {
+function updateLead(appId, updates, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
 
     var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
@@ -358,11 +358,11 @@ function submitLead(leadData) {
   }
 }
 
-function deleteLead(appId) {
+function deleteLead(appId, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
 
     var data = getSheetData_(CONFIG.LEADS_SHEET_ID, 'Leads');
     var headers = data[0];
@@ -389,13 +389,13 @@ function deleteLead(appId) {
   }
 }
 
-function getForms(filters) {
+function getForms(filters, userEmail) {
   filters = filters || {};
   var step = 'start';
   try {
     Logger.log('[getForms] step=start');
     step = 'getCurrentUser_';
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     Logger.log('[getForms] step=done user=' + user.email + ' role=' + user.role);
 
     step = 'ensureFormHeaders_';
@@ -470,9 +470,9 @@ function ensureFormHeaders_() {
   }
 }
 
-function createForm(formData) {
+function createForm(formData, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     ensureFormHeaders_();
 
     var formId = 'FORM-' + Utilities.getUuid().slice(0, 8);
@@ -513,9 +513,9 @@ function createForm(formData) {
   }
 }
 
-function updateForm(formId, updates) {
+function updateForm(formId, updates, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
 
     var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
     if (data.length <= 1) throw new Error('No forms found');
@@ -554,9 +554,9 @@ function updateForm(formId, updates) {
   }
 }
 
-function deleteForm(formId) {
+function deleteForm(formId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
 
     var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');
     var headers = data[0];
@@ -584,9 +584,9 @@ function deleteForm(formId) {
   }
 }
 
-function getForm(formId) {
+function getForm(formId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var found = findRowByColumn_(CONFIG.FORMS_SHEET_ID, 'Forms', 'FormID', formId);
     if (!found) throw new Error('Form not found');
 
@@ -625,9 +625,9 @@ function ensureGroupsHeaders_() {
   }
 }
 
-function createGroup(data) {
+function createGroup(data, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     if (!data.groupName) throw new Error('Group name required');
     
@@ -663,9 +663,9 @@ function getGroups() {
   }
 }
 
-function updateGroup(groupId, data) {
+function updateGroup(groupId, data, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
     if (!found) throw new Error('Group not found');
 
@@ -690,9 +690,9 @@ function updateGroup(groupId, data) {
   }
 }
 
-function debugCandidateSheet() {
+function debugCandidateSheet(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
     var data = sheet.getDataRange().getValues();
     return {
@@ -710,9 +710,9 @@ function debugCandidateSheet() {
   }
 }
 
-function migrateGroupsFromCandidates() {
+function migrateGroupsFromCandidates(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
 
     ensureGroupsHeaders_();
@@ -767,9 +767,9 @@ function migrateGroupsFromCandidates() {
   }
 }
 
-function archiveGroup(groupId) {
+function archiveGroup(groupId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
     if (!found) throw new Error('Group not found');
@@ -783,9 +783,9 @@ function archiveGroup(groupId) {
   }
 }
 
-function deleteGroup(groupId) {
+function deleteGroup(groupId, userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var found = findRowByColumn_(CONFIG.PROGRESS_SHEET_ID, 'Groups', 'GroupID', groupId);
     if (!found) throw new Error('Group not found');
@@ -799,10 +799,10 @@ function deleteGroup(groupId) {
   }
 }
 
-function getCandidates() {
+function getCandidates(userEmail) {
   try {
     ensureCandidatesHeaders_();
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
     var candidates = [];
     if (data.length > 1) {
@@ -822,11 +822,11 @@ function getCandidates() {
   }
 }
 
-function updateCandidate(rowIndex, updates) {
+function updateCandidate(rowIndex, updates, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
     if (rowIndex < 1 || rowIndex >= data.length) throw new Error('Candidate not found');
 
@@ -884,11 +884,11 @@ function updateCandidate(rowIndex, updates) {
   }
 }
 
-function updateCandidateFilingStatus(rowIndex, filingStatus) {
+function updateCandidateFilingStatus(rowIndex, filingStatus, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var headers = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate')[0];
     var fsCol = headers.indexOf('FilingStatus');
@@ -902,11 +902,11 @@ function updateCandidateFilingStatus(rowIndex, filingStatus) {
   }
 }
 
-function addCandidateToGroup(travelDoc, groupName) {
+function addCandidateToGroup(travelDoc, groupName, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     if (!travelDoc || !groupName) throw new Error('Travel document and group name required');
     
@@ -936,9 +936,9 @@ function addCandidateToGroup(travelDoc, groupName) {
   }
 }
 
-function checkEmgsNow() {
+function checkEmgsNow(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var result = cronCheckEmgsStatus_();
     return { success: true, result: result };
@@ -947,9 +947,9 @@ function checkEmgsNow() {
   }
 }
 
-function getNextEmgsSchedule() {
+function getNextEmgsSchedule(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') return { success: true, nextRun: null, active: false };
     var triggers = ScriptApp.getProjectTriggers();
     for (var i = 0; i < triggers.length; i++) {
@@ -964,9 +964,9 @@ function getNextEmgsSchedule() {
   }
 }
 
-function setupEmgsCronTrigger() {
+function setupEmgsCronTrigger(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
 
     var triggers = ScriptApp.getProjectTriggers();
@@ -1133,20 +1133,20 @@ function cronCheckEmgsStatus_() {
   return { checked: checked, updated: updated, skipped: skipped };
 }
 
-function getDashboard(agentIdFilter) {
+function getDashboard(agentIdFilter, userEmail) {
   try {
-    var summary = getDashboardSummary_(agentIdFilter);
+    var summary = getDashboardSummary_(agentIdFilter, userEmail);
     return { success: true, summary: summary };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 
-function fixLeadAgents() {
+function fixLeadAgents(userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
 
     var leadSheet = getSheetByName_(CONFIG.LEADS_SHEET_ID, 'Leads');
@@ -1226,9 +1226,9 @@ function fixLeadAgents() {
   }
 }
 
-function resetAllForms() {
+function resetAllForms(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
     var sheet = getSheetByName_(CONFIG.FORMS_SHEET_ID, 'Forms');
     var data = sheet.getDataRange().getValues();
@@ -1242,9 +1242,9 @@ function resetAllForms() {
   }
 }
 
-function syncFormUrls() {
+function syncFormUrls(userEmail) {
   try {
-    var user = getCurrentUser_();
+    var user = getCurrentUser_(userEmail);
     if (user.role !== 'admin') throw new Error('Admin only');
 
     var data = getSheetData_(CONFIG.FORMS_SHEET_ID, 'Forms');

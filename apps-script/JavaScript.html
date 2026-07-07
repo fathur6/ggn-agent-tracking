@@ -53,6 +53,8 @@ function hideLoadingOverlay() {
 var COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Democratic Republic of the Congo","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkiye","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 
 var CURRENT_USER = null;
+
+function _authEmail() { return CURRENT_USER ? CURRENT_USER.email || '' : ''; }
 var CURRENT_PAGE = 'dashboard';
 
 function showToast(msg, type) {
@@ -121,6 +123,16 @@ function initApp() {
         hideLoadingOverlay();
       } else {
         hideLoadingOverlay();
+        var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
+        if (isNotAuthed) {
+          document.getElementById('login-page').style.display = 'block';
+          document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
+            '<p style="margin-bottom:12px;font-size:13px;color:var(--text2)">Please enter the email address registered with your agent account to log in.</p>' +
+            '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
+            '<button class="btn btn-primary" onclick="loginAction()" style="width:100%">Log In</button>' +
+            '</div>';
+          return;
+        }
         var credEl = document.getElementById('login-credential');
         if (result.email) {
           credEl.style.display = 'block';
@@ -136,11 +148,38 @@ function initApp() {
       hideLoadingOverlay();
       document.getElementById('login-error').textContent = 'Unable to connect to server';
     })
-    .getMe();
+    .getMe(_authEmail());
+}
+
+function loginAction() {
+  var email = document.getElementById('login-email-input').value.trim();
+  if (!email) { showToast('Please enter your email', 'error'); return; }
+  showLoadingOverlay();
+  google.script.run.withSuccessHandler(function (result) {
+    hideLoadingOverlay();
+    if (result && result.email) {
+      CURRENT_USER = result;
+      try { localStorage.setItem('ugs-user', JSON.stringify(result)); } catch(ex) {}
+      document.getElementById('login-page').style.display = 'none';
+      document.getElementById('app-shell').style.display = 'flex';
+      renderUserInfo();
+      navigate('dashboard');
+    } else {
+      document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
+        '<p style="color:var(--danger);margin-bottom:8px">' + escapeHtml((result && result.error) || 'Login failed') + '</p>' +
+        '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
+        '<button class="btn btn-primary" onclick="loginAction()" style="width:100%">Log In</button>' +
+        '</div>';
+    }
+  }).withFailureHandler(function () {
+    hideLoadingOverlay();
+    document.getElementById('login-error').textContent = 'Unable to connect to server';
+  }).loginAgent(email);
 }
 
 function logout() {
   CURRENT_USER = null;
+  try { localStorage.removeItem('ugs-user'); } catch(ex) {}
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-page').style.display = 'block';
   document.getElementById('login-error').textContent = '';
@@ -212,7 +251,7 @@ function loadDashboard() {
     }
     html += '</div></div>';
     el.innerHTML = html;
-  }).getDashboard();
+  }).getDashboard(_authEmail());
 }
 
 function loadLeads(filters) {
@@ -223,7 +262,7 @@ function loadLeads(filters) {
     var leads = result.leads;
     var isAdmin = CURRENT_USER.role === 'admin';
     renderLeadsView(leads, isAdmin);
-  }).getLeads(filters || {});
+  }).getLeads(filters || {}, _authEmail());
 }
 
 function renderLeadsView(leads, isAdmin) {
@@ -325,7 +364,7 @@ function editLeadModal(appId) {
       '<button class="btn btn-primary btn-sm" onclick="saveLeadEdit(\'' + escapeHtml(appId) + '\')">Save</button></div>' +
       '</div></div>';
     document.body.insertAdjacentHTML('beforeend', html);
-  }).getLead(appId);
+  }).getLead(appId, _authEmail());
 }
 
 function saveLeadEdit(appId) {
@@ -346,7 +385,7 @@ function saveLeadEdit(appId) {
     if (!r.success) { alert(r.error); return; }
     closeLeadModal();
     applyFilters();
-  }).updateLead(appId, updates);
+  }).updateLead(appId, updates, _authEmail());
 }
 
 function deleteLeadAction(appId) {
@@ -355,7 +394,7 @@ function deleteLeadAction(appId) {
     if (!r.success) { alert(r.error); return; }
     showToast('Lead permanently deleted');
     applyFilters();
-  }).deleteLead(appId);
+  }).deleteLead(appId, _authEmail());
 }
 
 function closeLeadModal(e) {
@@ -380,7 +419,7 @@ function loadProcessing() {
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
     console.log('DEBUG: candidates received =', result.candidates ? result.candidates.length : 0);
-    google.script.run.withSuccessHandler(function (debug) { console.log('DEBUG sheet:', JSON.stringify(debug)); }).debugCandidateSheet();
+    google.script.run.withSuccessHandler(function (debug) { console.log('DEBUG sheet:', JSON.stringify(debug)); }).debugCandidateSheet(_authEmail());
     renderProcessing(result.candidates);
     google.script.run.withSuccessHandler(function (sched) {
       var countEl = document.getElementById('emgs-countdown');
@@ -404,8 +443,8 @@ function loadProcessing() {
       } else {
         countEl.textContent = 'EMGS: not scheduled';
       }
-    }).getNextEmgsSchedule();
-  }).getCandidates();
+    }).getNextEmgsSchedule(_authEmail());
+  }).getCandidates(_authEmail());
 }
 
 function getEmgsStatus_(rawProgress) {
@@ -522,7 +561,7 @@ function renderProcessing(candidates) {
       html += '</div>';
     });
     el.innerHTML = html;
-  }).getGroups();
+  }).getGroups(_authEmail());
 }
 
 function runEmgsCheck() {
@@ -536,7 +575,7 @@ function runEmgsCheck() {
     if (res.error) msg = 'Error: ' + res.error;
     alert(msg);
     loadProcessing();
-  }).checkEmgsNow();
+  }).checkEmgsNow(_authEmail());
 }
 
 function setupEmgsSchedule() {
@@ -544,7 +583,7 @@ function setupEmgsSchedule() {
   google.script.run.withSuccessHandler(function (r) {
     if (!r.success) { alert('Failed: ' + r.error); return; }
     alert(r.message || 'Schedule set up successfully');
-  }).setupEmgsCronTrigger();
+  }).setupEmgsCronTrigger(_authEmail());
 }
 
 function editCandidateModal(rowIndex) {
@@ -605,7 +644,7 @@ function saveCandidateEdit() {
     if (!r.success) { alert(r.error || 'Save failed'); return; }
     closeCandidateModal();
     loadProcessing();
-  }).updateCandidate(rowIndex, updates);
+  }).updateCandidate(rowIndex, updates, _authEmail());
 }
 
 function showAddGroupModal() {
@@ -648,7 +687,7 @@ function showAddGroupModal() {
   if (isAdmin) {
     google.script.run.withSuccessHandler(function (result) {
       buildModal(result.success ? result.agents : []);
-    }).getAgents();
+    }).getAgents(_authEmail());
   } else {
     buildModal(null);
   }
@@ -682,7 +721,7 @@ function createGroupAction() {
     closeModalById('add-group-overlay');
     showToast('Group created');
     loadProcessing();
-  }).createGroup(data);
+  }).createGroup(data, _authEmail());
 }
 
 function migrateCandidateGroups() {
@@ -692,7 +731,7 @@ function migrateCandidateGroups() {
     if (!r.success) { showToast(r.error, 'error'); return; }
     showToast('Groups migrated: ' + r.created + ' created out of ' + r.total + ' found');
     loadProcessing();
-  }).migrateGroupsFromCandidates();
+  }).migrateGroupsFromCandidates(_authEmail());
 }
 
 function updateAgentIdFromName() {
@@ -740,7 +779,7 @@ function saveEditGroup(groupId) {
     closeModalById('edit-group-overlay');
     showToast('Group updated');
     loadProcessing();
-  }).updateGroup(groupId, data);
+  }).updateGroup(groupId, data, _authEmail());
 }
 
 function closeModalById(id, e) {
@@ -766,7 +805,7 @@ function confirmArchiveGroup(groupId) {
     closeModalById('archive-group-overlay');
     showToast('Group archived');
     loadProcessing();
-  }).archiveGroup(groupId);
+  }).archiveGroup(groupId, _authEmail());
 }
 
 function showDeleteGroupModal(groupId, groupName) {
@@ -786,7 +825,7 @@ function confirmDeleteGroup(groupId) {
     closeModalById('delete-group-overlay');
     showToast('Group deleted');
     loadProcessing();
-  }).deleteGroup(groupId);
+  }).deleteGroup(groupId, _authEmail());
 }
 
 function showAddCandidateModal(groupName) {
@@ -810,7 +849,7 @@ function confirmAddCandidate(groupName) {
     closeModalById('add-candidate-overlay');
     showToast('Candidate added to group');
     loadProcessing();
-  }).addCandidateToGroup(travelDoc, groupName);
+  }).addCandidateToGroup(travelDoc, groupName, _authEmail());
 }
 
 function showDeleteCandidateModal(rowIndex) {
@@ -833,7 +872,7 @@ function confirmDeleteCandidate(rowIndex) {
     closeModalById('delete-candidate-overlay');
     showToast('Candidate marked as ' + status);
     loadProcessing();
-  }).updateCandidateFilingStatus(rowIndex, status);
+  }).updateCandidateFilingStatus(rowIndex, status, _authEmail());
 }
 
 function loadAgents() {
@@ -884,7 +923,7 @@ function loadAgents() {
       '<button class="btn btn-outline btn-sm" onclick="hideAddAgentModal()">Cancel</button>' +
       '<button class="btn btn-primary btn-sm" onclick="createAgent()">Create</button></div></div></div>';
     el.innerHTML = html;
-  }).getAgents();
+  }).getAgents(_authEmail());
 }
 
 function showAddAgentModal() { document.getElementById('agent-modal').style.display = 'flex'; }
@@ -900,7 +939,7 @@ function createAgent() {
     hideAddAgentModal();
     showToast('Agent created');
     loadAgents();
-  }).createAgent({ name: name, email: email, role: role });
+  }).createAgent({ name: name, email: email, role: role }, _authEmail());
 }
 
 function toggleAgentStatus(agentId, active) {
@@ -912,7 +951,7 @@ function toggleAgentStatus(agentId, active) {
     } else {
       showToast(active ? 'Agent activated' : 'Agent deactivated');
     }
-  }).updateAgent(agentId, { status: status });
+  }).updateAgent(agentId, { status: status }, _authEmail());
 }
 
 function handleDeleteAgent(agentId, name, isActive) {
@@ -924,7 +963,7 @@ function handleDeleteAgent(agentId, name, isActive) {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast(result.action === 'permanent' ? 'Agent permanently deleted' : 'Agent deactivated');
     loadAgents();
-  }).deleteAgent(agentId);
+  }).deleteAgent(agentId, _authEmail());
 }
 
 function loadForms() {
@@ -961,7 +1000,7 @@ function loadForms() {
     var msg = error && error.message ? error.message : String(error || 'unknown');
     el.innerHTML = '<div class="empty">Server error: ' + msg + '</div>';
     showToast('Error loading forms: ' + msg, 'error');
-  }).getForms(filters);
+  }).getForms(filters, _authEmail());
 }
 
 function renderFormsTimeline(forms, isAdmin) {
@@ -1092,7 +1131,7 @@ function showFormDetail(formId) {
     .withFailureHandler(function (err) {
       showToast('Error: ' + (err && err.message || 'unknown'), 'error');
     })
-    .getForm(formId);
+    .getForm(formId, _authEmail());
 }
 
 function renderFormDetailModal(f) {
@@ -1175,7 +1214,7 @@ function editFormModal(formId) {
       renderEditCalendar();
     })
     .withFailureHandler(function (err) { showToast('Error: ' + (err && err.message || 'unknown'), 'error'); })
-    .getForm(formId);
+    .getForm(formId, _authEmail());
 }
 
 function closeEditFormModal(overlayId) {
@@ -1192,7 +1231,7 @@ function saveFormEdit(formId, overlayId) {
     closeEditFormModal(overlayId);
     showToast('Form updated');
     loadForms();
-  }).updateForm(formId, { locationEvent: locationEvent, eventDate: eventDate, remark: remark });
+  }).updateForm(formId, { locationEvent: locationEvent, eventDate: eventDate, remark: remark }, _authEmail());
 }
 
 var EDIT_CAL_DATE = new Date();
@@ -1255,7 +1294,7 @@ function toggleFormActive(formId, active) {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast(active ? 'Form activated' : 'Form deactivated');
     loadForms();
-  }).updateForm(formId, { active: active });
+  }).updateForm(formId, { active: active }, _authEmail());
 }
 
 function handleDeleteForm(formId) {
@@ -1266,7 +1305,7 @@ function handleDeleteForm(formId) {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast('Form deleted');
     loadForms();
-  }).deleteForm(formId);
+  }).deleteForm(formId, _authEmail());
 }
 
 function groupFormsByAgentMonth(forms) {
@@ -1320,7 +1359,7 @@ function resetAllFormsAction() {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast('Cleared ' + result.cleared + ' forms');
     loadForms();
-  }).resetAllForms();
+  }).resetAllForms(_authEmail());
 }
 
 function syncFormUrls() {
@@ -1328,7 +1367,7 @@ function syncFormUrls() {
     if (!result.success) { showToast(result.error, 'error'); return; }
     showToast('Updated ' + result.updated + ' form URLs to ' + result.baseUrl);
     loadForms();
-  }).syncFormUrls();
+  }).syncFormUrls(_authEmail());
 }
 
 var CAL_DATE = new Date();
@@ -1354,7 +1393,7 @@ function createForm() {
     hideCreateFormModal();
     showToast('Form created! Public URL: ' + result.publicUrl);
     loadForms();
-  }).createForm({ locationEvent: locationEvent, eventDate: eventDate, remark: remark });
+  }).createForm({ locationEvent: locationEvent, eventDate: eventDate, remark: remark }, _authEmail());
 }
 
 function formatDisplayDate(iso) {

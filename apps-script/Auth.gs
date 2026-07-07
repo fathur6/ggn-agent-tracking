@@ -1,9 +1,23 @@
-function getCurrentUser_() {
-  var email = Session.getActiveUser().getEmail();
+function getCurrentUser_(optEmail) {
+  var email = optEmail || '';
+  if (!email) {
+    try { email = Session.getActiveUser().getEmail(); } catch (ex) {}
+  }
   if (!email) throw new Error('Not authenticated');
   var user = lookupUser_(email);
   if (!user) throw new Error('Your email is not registered in the system: ' + email);
   return user;
+}
+
+function loginAgent(email) {
+  try {
+    if (!email) throw new Error('Email required');
+    var user = lookupUser_(email);
+    if (!user) throw new Error('Email not registered as agent');
+    return user;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 function lookupUser_(email) {
