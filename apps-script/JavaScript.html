@@ -110,22 +110,15 @@ function statusBadge(status) {
   return '<span class="badge ' + cls + '">' + escapeHtml(s) + '</span>';
 }
 
-function startOAuthLogin() {
-  var clientId = document.getElementById('oauth-client-id').textContent.trim();
-  if (!clientId) {
+function showSignInButton() {
+  var oathUrlEl = document.getElementById('oauth-url');
+  var oauthUrl = oathUrlEl ? oathUrlEl.textContent.trim() : '';
+  if (!oauthUrl) {
     document.getElementById('login-error').innerHTML = '<p style="color:var(--danger)">Google Sign-In is not configured. Please contact the administrator.</p>';
     return;
   }
-  var state = document.getElementById('oauth-state').textContent.trim();
-  var redirectUri = document.getElementById('oauth-redirect-uri').textContent.trim();
-  var oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
-    'client_id=' + encodeURIComponent(clientId) +
-    '&redirect_uri=' + encodeURIComponent(redirectUri) +
-    '&response_type=code' +
-    '&scope=' + encodeURIComponent('openid email') +
-    '&state=' + encodeURIComponent(state) +
-    '&prompt=select_account';
-  window.top.location.href = oauthUrl;
+  document.getElementById('sign-in-with-google').href = oauthUrl;
+  document.getElementById('sign-in-with-google').style.display = 'block';
 }
 
 function initApp() {
@@ -137,9 +130,8 @@ function initApp() {
     hideLoadingOverlay();
     document.getElementById('login-page').style.display = 'flex';
     document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
-      '<p style="color:var(--danger);margin-bottom:8px">' + escapeHtml(oauthError) + '</p>' +
-      '<button class="btn btn-primary" onclick="startOAuthLogin()" style="width:100%">Sign in with Google</button>' +
-      '</div>';
+      '<p style="color:var(--danger);margin-bottom:8px">' + escapeHtml(oauthError) + '</p></div>';
+    showSignInButton();
     return;
   }
 
@@ -175,9 +167,8 @@ function initApp() {
         var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
         if (isNotAuthed) {
           document.getElementById('login-page').style.display = 'flex';
-          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
-            '<button class="btn btn-primary" onclick="startOAuthLogin()" style="width:100%">Sign in with Google</button>' +
-            '</div>';
+          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"></div>';
+          showSignInButton();
           return;
         }
         var credEl = document.getElementById('login-credential');

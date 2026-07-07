@@ -14,30 +14,38 @@ function doGet(e) {
   if (code && state) {
     try {
       var sessionToken = handleOAuthCode_(code, state);
-      var baseUrl = ScriptApp.getService().getUrl();
-      return HtmlService.createHtmlOutput(
-        '<script>window.top.location.href="' + baseUrl.replace(/"/g, '&quot;') + '?session=' + encodeURIComponent(sessionToken) + '";</script>'
-      ).setTitle('Redirecting...');
+      var sessUser = resolveSessionToken_(sessionToken);
+      var template = HtmlService.createTemplateFromFile('Index');
+      template.sessionEmail = sessUser.email;
+      template.sessionUser = JSON.stringify(sessUser);
+      template.oauthError = '';
+      template.oauthUrl = getOAuthUrl_();
+      return template
+        .evaluate()
+        .setTitle('UGS Agent Tracking')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     } catch (err) {
-      var baseUrl = ScriptApp.getService().getUrl();
-      return HtmlService.createHtmlOutput(
-        '<script>window.top.location.href="' + baseUrl.replace(/"/g, '&quot;') + '?error=' + encodeURIComponent(err.message) + '";</script>'
-      ).setTitle('Redirecting...');
+      var template = HtmlService.createTemplateFromFile('Index');
+      template.sessionEmail = '';
+      template.sessionUser = '';
+      template.oauthError = err.message;
+      template.oauthUrl = getOAuthUrl_();
+      return template
+        .evaluate()
+        .setTitle('UGS Agent Tracking')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
   }
-  var oauthState = Utilities.getUuid();
-  CacheService.getScriptCache().put('oauth_state_' + oauthState, 'pending', 600);
-  var oauthClientId = CONFIG.GOOGLE_CLIENT_ID || '';
-  var appUrl = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
   var sess = e && e.parameter && e.parameter.session;
   if (sess) {
     var sessUser = resolveSessionToken_(sess);
     var template = HtmlService.createTemplateFromFile('Index');
     template.sessionEmail = sessUser ? sessUser.email : '';
     template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
-    template.oauthClientId = oauthClientId;
-    template.oauthState = oauthState;
-    template.oauthRedirectUri = appUrl;
+    template.oauthError = '';
+    template.oauthUrl = getOAuthUrl_();
     return template
       .evaluate()
       .setTitle('UGS Agent Tracking')
@@ -49,14 +57,27 @@ function doGet(e) {
   template.sessionEmail = '';
   template.sessionUser = '';
   template.oauthError = errMsg || '';
-  template.oauthClientId = oauthClientId;
-  template.oauthState = oauthState;
-  template.oauthRedirectUri = appUrl;
+  template.oauthUrl = getOAuthUrl_();
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function getOAuthUrl_() {
+  var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
+  if (!clientId) return '';
+  var redirectUri = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
+  var state = Utilities.getUuid();
+  CacheService.getScriptCache().put('oauth_state_' + state, 'pending', 600);
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' +
+    'client_id=' + encodeURIComponent(clientId) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent('openid email') +
+    '&state=' + encodeURIComponent(state) +
+    '&access_type=offline';
 }
 
 function include(filename) {
