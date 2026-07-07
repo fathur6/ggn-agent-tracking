@@ -28,6 +28,7 @@ function doGet(e) {
   var oauthState = Utilities.getUuid();
   CacheService.getScriptCache().put('oauth_state_' + oauthState, 'pending', 600);
   var oauthClientId = CONFIG.GOOGLE_CLIENT_ID || '';
+  var appUrl = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
   var sess = e && e.parameter && e.parameter.session;
   if (sess) {
     var sessUser = resolveSessionToken_(sess);
@@ -36,6 +37,7 @@ function doGet(e) {
     template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
     template.oauthClientId = oauthClientId;
     template.oauthState = oauthState;
+    template.oauthRedirectUri = appUrl;
     return template
       .evaluate()
       .setTitle('UGS Agent Tracking')
@@ -49,6 +51,7 @@ function doGet(e) {
   template.oauthError = errMsg || '';
   template.oauthClientId = oauthClientId;
   template.oauthState = oauthState;
+  template.oauthRedirectUri = appUrl;
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')

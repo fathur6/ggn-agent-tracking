@@ -117,8 +117,7 @@ function startOAuthLogin() {
     return;
   }
   var state = document.getElementById('oauth-state').textContent.trim();
-  var redirectUri = window.top.location.href.split('?')[0].split('#')[0];
-  redirectUri = redirectUri.replace(/\/a\/[^\/]+\/macros\//, '/macros/');
+  var redirectUri = document.getElementById('oauth-redirect-uri').textContent.trim();
   var oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
     'client_id=' + encodeURIComponent(clientId) +
     '&redirect_uri=' + encodeURIComponent(redirectUri) +
