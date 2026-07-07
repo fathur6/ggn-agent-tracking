@@ -9,20 +9,8 @@ function getCurrentUser_(optEmail) {
   return user;
 }
 
-function getGoogleOAuthUrl() {
-  var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
-  if (!clientId) return '';
-  var redirectUri = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
-  var state = Utilities.getUuid();
-  var cache = CacheService.getScriptCache();
-  cache.put('oauth_state_' + state, 'pending', 600);
-  return 'https://accounts.google.com/o/oauth2/v2/auth?' +
-    'client_id=' + encodeURIComponent(clientId) +
-    '&redirect_uri=' + encodeURIComponent(redirectUri) +
-    '&response_type=code' +
-    '&scope=' + encodeURIComponent('openid email') +
-    '&state=' + encodeURIComponent(state) +
-    '&prompt=select_account';
+function getGoogleClientId() {
+  return CONFIG.GOOGLE_CLIENT_ID || '';
 }
 
 function handleOAuthCode_(code, state) {

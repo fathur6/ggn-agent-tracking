@@ -25,12 +25,17 @@ function doGet(e) {
       ).setTitle('Redirecting...');
     }
   }
+  var oauthState = Utilities.getUuid();
+  CacheService.getScriptCache().put('oauth_state_' + oauthState, 'pending', 600);
+  var oauthClientId = CONFIG.GOOGLE_CLIENT_ID || '';
   var sess = e && e.parameter && e.parameter.session;
   if (sess) {
     var sessUser = resolveSessionToken_(sess);
     var template = HtmlService.createTemplateFromFile('Index');
     template.sessionEmail = sessUser ? sessUser.email : '';
     template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
+    template.oauthClientId = oauthClientId;
+    template.oauthState = oauthState;
     return template
       .evaluate()
       .setTitle('UGS Agent Tracking')
@@ -42,6 +47,8 @@ function doGet(e) {
   template.sessionEmail = '';
   template.sessionUser = '';
   template.oauthError = errMsg || '';
+  template.oauthClientId = oauthClientId;
+  template.oauthState = oauthState;
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')

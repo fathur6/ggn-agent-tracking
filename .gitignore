@@ -12,3 +12,6 @@ v*.md
 graphify-out/
 .planning/graphs/
 .planning/cache/
+*.bak
+debug-snap*
+snapshot-*
