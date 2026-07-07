@@ -127,10 +127,21 @@ function initApp() {
         if (isNotAuthed) {
           document.getElementById('login-page').style.display = 'flex';
           document.getElementById('login-error').innerHTML = '<div class="login-form-box">' +
+            '<div id="detected-credential" style="display:none"></div>' +
             '<p style="margin-bottom:12px;font-size:13px;color:var(--text2)">Please enter the email address registered with your agent account to log in.</p>' +
             '<input id="login-email-input" class="input" type="email" placeholder="Your registered email" style="width:100%;margin-bottom:12px">' +
             '<button class="btn btn-primary" onclick="loginAction()" style="width:100%">Log In</button>' +
             '</div>';
+          google.script.run.withSuccessHandler(function(sessionEmail) {
+            var el = document.getElementById('detected-credential');
+            if (sessionEmail) {
+              el.style.display = 'block';
+              el.innerHTML = '<div class="cred-label">Signed in with</div><div class="cred-email">' + escapeHtml(sessionEmail) + '</div>';
+            } else if (sessionEmail === '') {
+              el.style.display = 'block';
+              el.innerHTML = '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg1)">Your Google session was detected, but your email could not be verified automatically. Make sure you enter the <strong>exact email</strong> registered with your agent account.</div>';
+            }
+          }).getSessionEmail();
           return;
         }
         var credEl = document.getElementById('login-credential');
@@ -140,7 +151,7 @@ function initApp() {
         }
         var isUnregistered = result.error && result.error.indexOf('not registered') !== -1;
         document.getElementById('login-error').innerHTML = isUnregistered
-          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:support@example.com">support@example.com</a> to request access.'
+          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:pps@unisza.edu.my">pps@unisza.edu.my</a> to request access.'
           : escapeHtml(result.error || 'Authentication failed');
       }
     })
@@ -174,7 +185,7 @@ function loginAction() {
   }).withFailureHandler(function () {
     hideLoadingOverlay();
     document.getElementById('login-error').textContent = 'Unable to connect to server';
-  }).loginAgent(email);
+  }).verifySessionEmailAndLogin(email);
 }
 
 function logout() {

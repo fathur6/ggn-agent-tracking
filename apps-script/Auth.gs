@@ -9,6 +9,25 @@ function getCurrentUser_(optEmail) {
   return user;
 }
 
+function getSessionEmail() {
+  try { return Session.getActiveUser().getEmail() || ''; } catch (ex) { return ''; }
+}
+
+function verifySessionEmailAndLogin(typedEmail) {
+  try {
+    var sessionEmail = Session.getActiveUser().getEmail();
+    if (sessionEmail && sessionEmail.toLowerCase() !== typedEmail.toLowerCase()) {
+      return { success: false, error: 'Google account mismatch. Signed in as ' + sessionEmail + ', but entered ' + typedEmail + '. Please sign out and sign in with the correct Google account first.' };
+    }
+    if (!typedEmail) throw new Error('Email required');
+    var user = lookupUser_(typedEmail);
+    if (!user) return { success: false, error: 'Email not registered as agent' };
+    return user;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function loginAgent(email) {
   try {
     if (!email) throw new Error('Email required');
