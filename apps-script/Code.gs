@@ -87,7 +87,8 @@ function include(filename) {
 function getMe(userEmail) {
   try {
     var user = getCurrentUser_(userEmail);
-    return { success: true, user: user };
+    var summary = getDashboardSummary_('', userEmail);
+    return { success: true, user: user, summary: summary };
   } catch (e) {
     var email = '';
     try { email = Session.getActiveUser().getEmail(); } catch (ex) { /* ignore */ }
