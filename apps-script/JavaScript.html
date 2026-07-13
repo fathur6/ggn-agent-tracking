@@ -526,7 +526,7 @@ function renderProcessing(candidates, groups) {
     agentNames.forEach(function (agentName) {
       html += '<div class="card processing-agent-card">' +
         '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>' +
-        '<div class="proc-table-header"><span>Group Name</span><span>Total</span><span>Status</span><span></span><span></span></div>';
+        '<div class="proc-table-header"><span>Group Name</span><span>Total</span><span>Status (Ongoing: Orange / Completed: Green)</span><span></span><span></span></div>';
       var agentGroups = byAgent[agentName];
       var groupNames = Object.keys(agentGroups).sort();
       groupNames.forEach(function (groupName) {
