@@ -119,6 +119,10 @@ function showSignInButton() {
   }
   document.getElementById('sign-in-with-google').href = oauthUrl;
   document.getElementById('sign-in-with-google').style.display = 'block';
+  document.getElementById('sign-in-with-google').onclick = function(e) {
+    e.preventDefault();
+    window.open(oauthUrl, '_blank');
+  };
 }
 
 function initApp() {

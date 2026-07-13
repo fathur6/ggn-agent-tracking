@@ -33,6 +33,8 @@ function doGet(e) {
       template.sessionUser = '';
       template.oauthError = err.message;
       template.oauthUrl = getOAuthUrl_();
+      template.initialSummary = '';
+      template.initialProcessing = '';
       return template
         .evaluate()
         .setTitle('UGS Agent Tracking')
