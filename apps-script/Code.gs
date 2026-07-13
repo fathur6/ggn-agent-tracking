@@ -20,6 +20,8 @@ function doGet(e) {
       template.sessionUser = JSON.stringify(sessUser);
       template.oauthError = '';
       template.oauthUrl = getOAuthUrl_();
+      try { template.initialSummary = JSON.stringify(getDashboardSummary_('', sessUser.email)); } catch (ex) { template.initialSummary = ''; }
+      try { var pp = getProcessingPageData(sessUser.email); template.initialProcessing = JSON.stringify(pp.success ? { candidates: pp.candidates, groups: pp.groups, schedule: pp.schedule } : {}); } catch (ex) { template.initialProcessing = ''; }
       return template
         .evaluate()
         .setTitle('UGS Agent Tracking')
@@ -46,6 +48,8 @@ function doGet(e) {
     template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
     template.oauthError = '';
     template.oauthUrl = getOAuthUrl_();
+    try { template.initialSummary = sessUser ? JSON.stringify(getDashboardSummary_('', sessUser.email)) : ''; } catch (ex) { template.initialSummary = ''; }
+    try { if (sessUser) { var pp = getProcessingPageData(sessUser.email); template.initialProcessing = JSON.stringify(pp.success ? { candidates: pp.candidates, groups: pp.groups, schedule: pp.schedule } : {}); } else { template.initialProcessing = ''; } } catch (ex) { template.initialProcessing = ''; }
     return template
       .evaluate()
       .setTitle('UGS Agent Tracking')
@@ -58,6 +62,8 @@ function doGet(e) {
   template.sessionUser = '';
   template.oauthError = errMsg || '';
   template.oauthUrl = getOAuthUrl_();
+  template.initialSummary = '';
+  template.initialProcessing = '';
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')

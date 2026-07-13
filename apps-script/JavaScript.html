@@ -147,6 +147,27 @@ function initApp() {
       document.getElementById('app-shell').style.display = 'flex';
       document.getElementById('login-page').style.display = 'none';
       renderUserInfo();
+      var summaryEl = document.getElementById('initial-summary');
+      if (summaryEl && summaryEl.textContent.trim()) {
+        try {
+          var summary = JSON.parse(summaryEl.textContent.trim());
+          var procEl = document.getElementById('initial-processing');
+          if (procEl && procEl.textContent.trim()) {
+            try { var proc = JSON.parse(procEl.textContent.trim()); _processingGroupsCache = proc.groups || []; _processingCache = proc; } catch(ex) {}
+          }
+          CURRENT_PAGE = 'dashboard';
+          document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+          var pageEl = document.getElementById('page-dashboard');
+          if (pageEl) pageEl.classList.add('active');
+          document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+          var nav = document.getElementById('nav-dashboard');
+          if (nav) nav.classList.add('active');
+          if (window.innerWidth < 769) { var m = document.querySelector('.sidebar'); if (m) m.classList.remove('open'); }
+          loadDashboard(summary);
+          hideLoadingOverlay();
+          return;
+        } catch(ex) {}
+      }
       navigate('dashboard');
       hideLoadingOverlay();
       return;
