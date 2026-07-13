@@ -203,7 +203,7 @@ function initApp() {
         hideLoadingOverlay();
         if (!result) {
           document.getElementById('login-page').style.display = 'flex';
-          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"><p style="color:var(--danger);margin-bottom:12px">Unable to load data. Try refreshing the page.</p><button class="btn btn-primary" onclick="location.reload()">Retry</button></div>';
+          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"><p style="color:var(--text2);margin-bottom:16px">Sign in with your UniSZA Google account to continue.</p></div>';
           showSignInButton();
           return;
         }
