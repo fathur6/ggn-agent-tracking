@@ -170,6 +170,10 @@ function initApp() {
         if (nav) nav.classList.add('active');
         if (window.innerWidth < 769) { var m = document.querySelector('.sidebar'); if (m) m.classList.remove('open'); }
         loadDashboard(result.summary);
+        if (result.processing) {
+          _processingGroupsCache = result.processing.groups || [];
+          _processingCache = result.processing;
+        }
       } else {
         hideLoadingOverlay();
         var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
@@ -438,6 +442,28 @@ var _emgsCountdownInterval = null;
 
 function loadProcessing() {
   var el = document.getElementById('processing-content');
+  if (_processingCache) {
+    var cached = _processingCache;
+    _processingCache = null;
+    renderProcessing(cached.candidates, cached.groups || []);
+    var countEl = document.getElementById('emgs-countdown');
+    if (countEl) {
+      var sched = cached.schedule || {};
+      if (sched.active && sched.nextRun) {
+        var nextDate = new Date(sched.nextRun);
+        countEl.style.display = 'block';
+        if (_emgsCountdownInterval) clearInterval(_emgsCountdownInterval);
+        _emgsCountdownInterval = setInterval(function() {
+          var diff = nextDate - new Date();
+          if (diff <= 0) { countEl.textContent = 'EMGS: running...'; return; }
+          countEl.textContent = 'Next EMGS: ' + Math.floor(diff / 86400000) + 'd ' + Math.floor((diff % 86400000) / 3600000) + 'h ' + Math.floor((diff % 3600000) / 60000) + 'm ' + Math.floor((diff % 60000) / 1000) + 's';
+        }, 1000);
+      } else {
+        countEl.textContent = 'EMGS: not scheduled';
+      }
+    }
+    return;
+  }
   el.innerHTML = '<div class="loading">Loading...</div>';
   if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
@@ -482,6 +508,7 @@ function emgsStatusBadge_(status) {
 }
 
 var _processingGroupsCache = [];
+var _processingCache = null;
 
 function toggleGroupTable(id) {
   var body = document.getElementById(id);
