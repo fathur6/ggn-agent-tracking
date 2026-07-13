@@ -155,7 +155,7 @@ function initApp() {
 
   google.script.run
     .withSuccessHandler(function (result) {
-      if (result.success) {
+      if (result && result.success) {
         CURRENT_USER = result.user;
         document.getElementById('app-shell').style.display = 'flex';
         document.getElementById('login-page').style.display = 'none';
@@ -176,6 +176,12 @@ function initApp() {
         }
       } else {
         hideLoadingOverlay();
+        if (!result) {
+          document.getElementById('login-page').style.display = 'flex';
+          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"><p style="color:var(--danger)">Unable to load data. Please try refreshing the page.</p></div>';
+          showSignInButton();
+          return;
+        }
         var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
         if (isNotAuthed) {
           document.getElementById('login-page').style.display = 'flex';
@@ -277,7 +283,7 @@ function loadDashboard(summary) {
   if (summary) { renderDashboardContent(el, summary); return; }
   el.innerHTML = '<div class="loading">Loading...</div>';
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
+    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
     renderDashboardContent(el, result.summary);
   }).getDashboard('', _authEmail());
 }
@@ -286,7 +292,7 @@ function loadLeads(filters) {
   var el = document.getElementById('leads-content');
   el.innerHTML = '<div class="loading">Loading...</div>';
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { el.innerHTML = '<div class="empty">Error loading leads</div>'; return; }
+    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading leads</div>'; return; }
     var leads = result.leads;
     var isAdmin = CURRENT_USER.role === 'admin';
     renderLeadsView(leads, isAdmin);
@@ -367,7 +373,7 @@ function clearFilters() {
 
 function editLeadModal(appId) {
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { alert(result.error); return; }
+    if (!result || !result.success) { alert(result.error); return; }
     var l = result.lead;
     var isAdmin = CURRENT_USER.role === 'admin';
     var statusOpts = '';
@@ -467,7 +473,7 @@ function loadProcessing() {
   el.innerHTML = '<div class="loading">Loading...</div>';
   if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
+    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml((result && result.error) || 'unknown') + '</div>'; return; }
     _processingGroupsCache = result.groups || [];
     renderProcessing(result.candidates, result.groups || []);
     var countEl = document.getElementById('emgs-countdown');
@@ -939,7 +945,7 @@ function loadAgents() {
   if (CURRENT_USER.role !== 'admin') { el.innerHTML = '<div class="empty">Admin access only</div>'; return; }
   el.innerHTML = '<div class="loading">Loading...</div>';
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { el.innerHTML = '<div class="empty">Error loading agents</div>'; return; }
+    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading agents</div>'; return; }
     var agents = result.agents;
     var html = '<div class="flex-between mb-4"><div class="card-title">Agents (' + agents.length + ')</div>' +
       '<button class="btn btn-primary btn-sm" onclick="showAddAgentModal()">+ Add Agent</button></div>';
@@ -994,7 +1000,7 @@ function createAgent() {
   var role = document.getElementById('agent-role').value;
   if (!name || !email) { showToast('Name and email required', 'error'); return; }
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     hideAddAgentModal();
     showToast('Agent created');
     loadAgents();
@@ -1004,7 +1010,7 @@ function createAgent() {
 function toggleAgentStatus(agentId, active) {
   var status = active ? 'active' : 'inactive';
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) {
+    if (!result || !result.success) {
       showToast(result.error, 'error');
       loadAgents();
     } else {
@@ -1019,7 +1025,7 @@ function handleDeleteAgent(agentId, name, isActive) {
     : 'Permanently delete agent "' + name + '"? This cannot be undone.';
   if (!confirm(msg)) return;
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     showToast(result.action === 'permanent' ? 'Agent permanently deleted' : 'Agent deactivated');
     loadAgents();
   }).deleteAgent(agentId, _authEmail());
@@ -1184,7 +1190,7 @@ function filterFormsTimeline() {
 function showFormDetail(formId) {
   google.script.run
     .withSuccessHandler(function (result) {
-      if (!result.success) { showToast(result.error, 'error'); return; }
+      if (!result || !result.success) { showToast(result.error, 'error'); return; }
       renderFormDetailModal(result.form);
     })
     .withFailureHandler(function (err) {
@@ -1241,7 +1247,7 @@ function closeFormDetail(e) {
 function editFormModal(formId) {
   google.script.run
     .withSuccessHandler(function (result) {
-      if (!result.success) { showToast(result.error, 'error'); return; }
+      if (!result || !result.success) { showToast(result.error, 'error'); return; }
       var f = result.form;
 
       var overlayId = 'edit-form-overlay-' + formId.replace(/\W/g, '');
@@ -1350,7 +1356,7 @@ function toggleFormActive(formId, active) {
   var label = active ? 'Reactivate' : 'Deactivate';
   if (!confirm(label + ' this form?')) return;
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     showToast(active ? 'Form activated' : 'Form deactivated');
     loadForms();
   }).updateForm(formId, { active: active }, _authEmail());
@@ -1361,7 +1367,7 @@ function handleDeleteForm(formId) {
   var msg = isAdmin ? 'Delete this form permanently?' : 'Delete this form?';
   if (!confirm(msg)) return;
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     showToast('Form deleted');
     loadForms();
   }).deleteForm(formId, _authEmail());
@@ -1415,7 +1421,7 @@ function toggleMonth(monthId) {
 function resetAllFormsAction() {
   if (!confirm('Reset ALL forms? This will delete all mockup form data.')) return;
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     showToast('Cleared ' + result.cleared + ' forms');
     loadForms();
   }).resetAllForms(_authEmail());
@@ -1423,7 +1429,7 @@ function resetAllFormsAction() {
 
 function syncFormUrls() {
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     showToast('Updated ' + result.updated + ' form URLs to ' + result.baseUrl);
     loadForms();
   }).syncFormUrls(_authEmail());
@@ -1448,7 +1454,7 @@ function createForm() {
   var eventDate = CAL_SELECTED;
   var remark = document.getElementById('form-remark').value.trim();
   google.script.run.withSuccessHandler(function (result) {
-    if (!result.success) { showToast(result.error, 'error'); return; }
+    if (!result || !result.success) { showToast(result.error, 'error'); return; }
     hideCreateFormModal();
     showToast('Form created! Public URL: ' + result.publicUrl);
     loadForms();
