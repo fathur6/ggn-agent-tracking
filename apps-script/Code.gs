@@ -886,6 +886,42 @@ function getCandidates(userEmail) {
   }
 }
 
+function getProcessingPageData(userEmail) {
+  try {
+    ensureCandidatesHeaders_();
+    var user = getCurrentUser_(userEmail);
+    var data = getSheetData_(CONFIG.PROGRESS_SHEET_ID, 'Candidate');
+    var candidates = [];
+    if (data.length > 1) {
+      var headers = data[0];
+      for (var i = 1; i < data.length; i++) {
+        var obj = { _row: i };
+        for (var j = 0; j < headers.length; j++) {
+          obj[headers[j]] = data[i][j];
+        }
+        if (user.role === 'agent' && obj['AgentID'] !== user.agentId) continue;
+        candidates.push(obj);
+      }
+    }
+    ensureGroupsHeaders_();
+    var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
+    var schedule = { active: false, nextRun: null };
+    if (user.role === 'admin') {
+      var triggers = ScriptApp.getProjectTriggers();
+      for (var ti = 0; ti < triggers.length; ti++) {
+        if (triggers[ti].getHandlerFunction() === 'cronCheckEmgsStatus_') {
+          var next = triggers[ti].getNextRunTime();
+          if (next) schedule = { active: true, nextRun: next.toISOString() };
+          break;
+        }
+      }
+    }
+    return { success: true, candidates: candidates, groups: groups, schedule: schedule };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function updateCandidate(rowIndex, updates, userEmail) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);

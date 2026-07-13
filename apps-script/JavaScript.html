@@ -430,33 +430,26 @@ function loadProcessing() {
   if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
     if (!result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml(result.error || 'unknown') + '</div>'; return; }
-    console.log('DEBUG: candidates received =', result.candidates ? result.candidates.length : 0);
-    google.script.run.withSuccessHandler(function (debug) { console.log('DEBUG sheet:', JSON.stringify(debug)); }).debugCandidateSheet(_authEmail());
-    renderProcessing(result.candidates);
-    google.script.run.withSuccessHandler(function (sched) {
-      var countEl = document.getElementById('emgs-countdown');
-      if (!countEl) return;
-      if (sched.active && sched.nextRun) {
-        var nextDate = new Date(sched.nextRun);
-        countEl.style.display = 'block';
-        function tick() {
-          var now = new Date();
-          var diff = nextDate - now;
-          if (diff <= 0) { countEl.textContent = 'EMGS: running...'; return; }
-          var d = Math.floor(diff / 86400000);
-          var h = Math.floor((diff % 86400000) / 3600000);
-          var m = Math.floor((diff % 3600000) / 60000);
-          var s = Math.floor((diff % 60000) / 1000);
-          countEl.textContent = 'Next EMGS: ' + d + 'd ' + h + 'h ' + m + 'm ' + s + 's';
-        }
-        tick();
-        if (_emgsCountdownInterval) clearInterval(_emgsCountdownInterval);
-        _emgsCountdownInterval = setInterval(tick, 1000);
-      } else {
-        countEl.textContent = 'EMGS: not scheduled';
+    _processingGroupsCache = result.groups || [];
+    renderProcessing(result.candidates, result.groups || []);
+    var countEl = document.getElementById('emgs-countdown');
+    if (!countEl) return;
+    var sched = result.schedule || {};
+    if (sched.active && sched.nextRun) {
+      var nextDate = new Date(sched.nextRun);
+      countEl.style.display = 'block';
+      function tick() {
+        var diff = nextDate - new Date();
+        if (diff <= 0) { countEl.textContent = 'EMGS: running...'; return; }
+        countEl.textContent = 'Next EMGS: ' + Math.floor(diff / 86400000) + 'd ' + Math.floor((diff % 86400000) / 3600000) + 'h ' + Math.floor((diff % 3600000) / 60000) + 'm ' + Math.floor((diff % 60000) / 1000) + 's';
       }
-    }).getNextEmgsSchedule(_authEmail());
-  }).getCandidates(_authEmail());
+      tick();
+      if (_emgsCountdownInterval) clearInterval(_emgsCountdownInterval);
+      _emgsCountdownInterval = setInterval(tick, 1000);
+    } else {
+      countEl.textContent = 'EMGS: not scheduled';
+    }
+  }).getProcessingPageData(_authEmail());
 }
 
 function getEmgsStatus_(rawProgress) {
@@ -487,13 +480,10 @@ function toggleGroupTable(id) {
   if (chevron) chevron.textContent = isHidden ? '▲' : '▼';
 }
 
-function renderProcessing(candidates) {
+function renderProcessing(candidates, groups) {
   var el = document.getElementById('processing-content');
-  google.script.run.withSuccessHandler(function (groupsResult) {
-    var groups = groupsResult.success ? (groupsResult.groups || []) : [];
-    _processingGroupsCache = groups;
-    var byAgent = {};
-    candidates.forEach(function (c) {
+  var byAgent = {};
+  candidates.forEach(function (c) {
       var agentName = c['AgentName'] || 'Unknown';
       if (!byAgent[agentName]) byAgent[agentName] = {};
       var group = c['Group'] || 'Default';
@@ -592,7 +582,6 @@ function renderProcessing(candidates) {
       html += '</div>';
     });
     el.innerHTML = html;
-  }).getGroups(_authEmail());
 }
 
 function runEmgsCheck() {
