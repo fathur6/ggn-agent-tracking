@@ -106,14 +106,18 @@ function getMe(userEmail) {
     var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
     var schedule = { active: false, nextRun: null };
     if (user.role === 'admin') {
-      var triggers = ScriptApp.getProjectTriggers();
-      for (var ti = 0; ti < triggers.length; ti++) {
-        if (triggers[ti].getHandlerFunction() === 'cronCheckEmgsStatus_') {
-          var next = triggers[ti].getNextRunTime();
-          if (next) schedule = { active: true, nextRun: next.toISOString() };
-          break;
+      try {
+        var triggers = ScriptApp.getProjectTriggers();
+        for (var ti = 0; ti < triggers.length; ti++) {
+          if (triggers[ti].getHandlerFunction() === 'cronCheckEmgsStatus_') {
+            if (triggers[ti].getNextRunTime) {
+              var next = triggers[ti].getNextRunTime();
+              if (next) schedule = { active: true, nextRun: next.toISOString() };
+            }
+            break;
+          }
         }
-      }
+      } catch (e) { /* ignore trigger errors */ }
     }
     return { success: true, user: user, summary: summary, processing: { candidates: candidates, groups: groups, schedule: schedule } };
   } catch (e) {
@@ -935,14 +939,18 @@ function getProcessingPageData(userEmail) {
     var groups = getSheetObjects_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
     var schedule = { active: false, nextRun: null };
     if (user.role === 'admin') {
-      var triggers = ScriptApp.getProjectTriggers();
-      for (var ti = 0; ti < triggers.length; ti++) {
-        if (triggers[ti].getHandlerFunction() === 'cronCheckEmgsStatus_') {
-          var next = triggers[ti].getNextRunTime();
-          if (next) schedule = { active: true, nextRun: next.toISOString() };
-          break;
+      try {
+        var triggers = ScriptApp.getProjectTriggers();
+        for (var ti = 0; ti < triggers.length; ti++) {
+          if (triggers[ti].getHandlerFunction() === 'cronCheckEmgsStatus_') {
+            if (triggers[ti].getNextRunTime) {
+              var next = triggers[ti].getNextRunTime();
+              if (next) schedule = { active: true, nextRun: next.toISOString() };
+            }
+            break;
+          }
         }
-      }
+      } catch (e) { /* ignore trigger errors */ }
     }
     return { success: true, candidates: candidates, groups: groups, schedule: schedule };
   } catch (e) {
