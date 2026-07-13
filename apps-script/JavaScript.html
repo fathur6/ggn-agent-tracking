@@ -526,7 +526,7 @@ function renderProcessing(candidates, groups) {
     agentNames.forEach(function (agentName) {
       html += '<div class="card processing-agent-card">' +
         '<div class="card-title processing-agent-header">' + escapeHtml(agentName) + '</div>' +
-        '<div class="proc-table-header"><span>Group Name</span><span>Candidates</span><span>Under Processing</span><span>eVAL Approved</span><span></span><span></span></div>';
+        '<div class="proc-table-header"><span>Group Name</span><span>Total</span><span>Status</span><span></span><span></span></div>';
       var agentGroups = byAgent[agentName];
       var groupNames = Object.keys(agentGroups).sort();
       groupNames.forEach(function (groupName) {
@@ -556,8 +556,11 @@ function renderProcessing(candidates, groups) {
           '<div class="proc-group-header" onclick="toggleGroupTable(\'' + sectionId + '\')">' +
           '<div class="proc-group-name">' + escapeHtml(groupName) + '</div>' +
           '<div class="proc-group-stat">' + totalCount + '</div>' +
-          '<div class="proc-group-stat">' + underProcessingCount + '</div>' +
-          '<div class="proc-group-stat proc-stat-eval">' + evalApprovedCount + '</div>' +
+          '<div class="proc-bar-track">' +
+            (underProcessingCount > 0 ? '<div class="proc-bar-seg proc-bar-proc" style="width:' + Math.round(underProcessingCount / totalCount * 100) + '%"><span class="proc-bar-label">' + underProcessingCount + '</span></div>' : '') +
+            (evalApprovedCount > 0 ? '<div class="proc-bar-seg proc-bar-eval" style="width:' + Math.round(evalApprovedCount / totalCount * 100) + '%"><span class="proc-bar-label">' + evalApprovedCount + '</span></div>' : '') +
+            (totalCount === 0 ? '<span class="proc-bar-empty">0</span>' : '') +
+          '</div>' +
           '<div class="proc-group-actions">' +
             (groupId ? '' +
               (isAdmin || groupObj.AgentID === CURRENT_USER.agentId ? '<button class="btn-icon" onclick="event.stopPropagation();showEditGroupModal(\'' + escapeHtml(groupId) + '\')" title="Edit group">' +
