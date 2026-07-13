@@ -59,6 +59,7 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   var errMsg = e && e.parameter && e.parameter.error;
+  try { ensureGroupsHeaders_(); } catch (ex) { /* ignore */ }
   var template = HtmlService.createTemplateFromFile('Index');
   template.sessionEmail = '';
   template.sessionUser = '';
@@ -719,13 +720,25 @@ function ensureGroupsHeaders_() {
   var sheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Groups');
   var headers = ['GroupID','GroupName','AgentName','AgentID','StartDate','MainInstitution','Country','ExpectedEndDate','Remarks','FilingStatus','CreatedAt'];
   var data = sheet.getDataRange().getValues();
-  if (data.length === 0 || data[0][0] !== 'GroupID') {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  } else if (data[0].length < headers.length) {
-    // Extend headers if missing columns
-    for (var ci = data[0].length; ci < headers.length; ci++) {
-      sheet.getRange(1, ci + 1).setValue(headers[ci]);
+  var needsReset = data.length === 0 || data[0][0] !== 'GroupID' || data[0].length !== headers.length;
+  if (!needsReset) {
+    var seen = {};
+    for (var hi = 0; hi < data[0].length; hi++) {
+      var h = data[0][hi];
+      if (h && seen[h]) { needsReset = true; break; }
+      if (h) seen[h] = true;
     }
+  }
+  if (needsReset) {
+    sheet.getRange(1, 1, 1, sheet.getLastColumn()).clearContent();
+    if (data.length > 0) {
+      // Preserve existing data rows by only clearing and re-setting header
+      for (var di = 1; di < data.length; di++) {
+        var name = data[di][0] || data[di][1] || '';
+        if (!name) sheet.deleteRow(di + 1);
+      }
+    }
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
 }
 
