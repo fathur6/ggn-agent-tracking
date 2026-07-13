@@ -178,58 +178,10 @@ function initApp() {
     } catch(ex) { /* fall through to normal login */ }
   }
 
-  google.script.run
-    .withSuccessHandler(function (result) {
-      if (result && result.success) {
-        CURRENT_USER = result.user;
-        document.getElementById('app-shell').style.display = 'flex';
-        document.getElementById('login-page').style.display = 'none';
-        renderUserInfo();
-        hideLoadingOverlay();
-        CURRENT_PAGE = 'dashboard';
-        document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
-        var pageEl = document.getElementById('page-dashboard');
-        if (pageEl) pageEl.classList.add('active');
-        document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
-        var nav = document.getElementById('nav-dashboard');
-        if (nav) nav.classList.add('active');
-        if (window.innerWidth < 769) { var m = document.querySelector('.sidebar'); if (m) m.classList.remove('open'); }
-        loadDashboard(result.summary);
-        if (result.processing) {
-          _processingGroupsCache = result.processing.groups || [];
-          _processingCache = result.processing;
-        }
-      } else {
-        hideLoadingOverlay();
-        if (!result) {
-          document.getElementById('login-page').style.display = 'flex';
-          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"><p style="color:var(--text2);margin-bottom:16px">Sign in with your UniSZA Google account to continue.</p></div>';
-          showSignInButton();
-          return;
-        }
-        var isNotAuthed = result.error && result.error.indexOf('Not authenticated') !== -1;
-        if (isNotAuthed) {
-          document.getElementById('login-page').style.display = 'flex';
-          document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box"></div>';
-          showSignInButton();
-          return;
-        }
-        var credEl = document.getElementById('login-credential');
-        if (result.email) {
-          credEl.style.display = 'block';
-          credEl.innerHTML = '<div class="cred-label">Detected credential</div><div class="cred-email">' + escapeHtml(result.email) + '</div>';
-        }
-        var isUnregistered = result.error && result.error.indexOf('not registered') !== -1;
-        document.getElementById('login-error').innerHTML = isUnregistered
-          ? 'This credential is not registered in the module.<br>Please contact <a href="mailto:pps@unisza.edu.my">pps@unisza.edu.my</a> to request access.'
-          : escapeHtml(result.error || 'Authentication failed');
-      }
-    })
-    .withFailureHandler(function () {
-      hideLoadingOverlay();
-      document.getElementById('login-error').textContent = 'Unable to connect to server';
-    })
-    .getMe(_authEmail());
+  // No session — show sign-in directly (skip GAS call, iframe transport blocked by some extensions)
+  hideLoadingOverlay();
+  document.getElementById('login-page').style.display = 'flex';
+  showSignInButton();
 }
 
 function logout() {
