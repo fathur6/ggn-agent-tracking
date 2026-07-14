@@ -110,78 +110,39 @@ function statusBadge(status) {
   return '<span class="badge ' + cls + '">' + escapeHtml(s) + '</span>';
 }
 
-function showSignInButton() {
-  var oathUrlEl = document.getElementById('oauth-url');
-  var oauthUrl = oathUrlEl ? oathUrlEl.textContent.trim() : '';
-  if (!oauthUrl) {
-    document.getElementById('login-error').innerHTML = '<p style="color:var(--danger)">Google Sign-In is not configured. Please contact the administrator.</p>';
-    return;
-  }
-  document.getElementById('sign-in-with-google').href = oauthUrl;
-  document.getElementById('sign-in-with-google').style.display = 'block';
-  document.getElementById('sign-in-with-google').onclick = function(e) {
-    e.preventDefault();
-    window.open(oauthUrl, '_blank');
-  };
-}
+function _authEmail() { return CURRENT_USER ? CURRENT_USER.email || '' : ''; }
 
 function initApp() {
   showLoadingOverlay();
-
-  var oauthErrorRaw = document.getElementById('oauth-error');
-  var oauthError = oauthErrorRaw ? oauthErrorRaw.textContent.trim() : '';
-  if (oauthError) {
-    hideLoadingOverlay();
-    document.getElementById('login-page').style.display = 'flex';
-    document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
-      '<p style="color:var(--danger);margin-bottom:8px">' + escapeHtml(oauthError) + '</p></div>';
-    showSignInButton();
-    return;
-  }
-
-  var sessionEmailEl = document.getElementById('session-email');
-  var sessionUserEl = document.getElementById('session-user');
-  var sessionEmail = sessionEmailEl ? sessionEmailEl.textContent.trim() : '';
-  var sessionUserRaw = sessionUserEl ? sessionUserEl.textContent.trim() : '';
-
-  if (sessionEmail && sessionUserRaw) {
-    try {
-      CURRENT_USER = JSON.parse(sessionUserRaw);
-      try { localStorage.setItem('ugs-user', sessionUserRaw); } catch(ex) {}
+  document.getElementById('status-text').textContent = 'Authenticating...';
+  google.script.run.withSuccessHandler(function(result) {
+    if (result && result.success) {
+      CURRENT_USER = result;
+      if (result.role === 'admin') CURRENT_USER.role = 'admin';
+      if (result.name) CURRENT_USER.name = result.name;
+      document.getElementById('status-text').textContent = 'Loading...';
       document.getElementById('app-shell').style.display = 'flex';
-      document.getElementById('login-page').style.display = 'none';
-      renderUserInfo();
-      var summaryEl = document.getElementById('initial-summary');
-      if (summaryEl && summaryEl.textContent.trim()) {
-        try {
-          var summary = JSON.parse(summaryEl.textContent.trim());
-          var procEl = document.getElementById('initial-processing');
-          if (procEl && procEl.textContent.trim()) {
-            try { var proc = JSON.parse(procEl.textContent.trim()); _processingGroupsCache = proc.groups || []; _processingCache = proc; } catch(ex) {}
-          }
-          CURRENT_PAGE = 'dashboard';
-          document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
-          var pageEl = document.getElementById('page-dashboard');
-          if (pageEl) pageEl.classList.add('active');
-          document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
-          var nav = document.getElementById('nav-dashboard');
-          if (nav) nav.classList.add('active');
-          if (window.innerWidth < 769) { var m = document.querySelector('.sidebar'); if (m) m.classList.remove('open'); }
-          loadDashboard(summary);
-          hideLoadingOverlay();
-          return;
-        } catch(ex) {}
-      }
-      navigate('dashboard');
       hideLoadingOverlay();
-      return;
-    } catch(ex) { /* fall through to normal login */ }
-  }
-
-  // No session — show sign-in directly (skip GAS call, iframe transport blocked by some extensions)
-  hideLoadingOverlay();
-  document.getElementById('login-page').style.display = 'flex';
-  showSignInButton();
+      renderUserInfo();
+      navigate('dashboard');
+    } else if (result && result.error === 'Not authenticated') {
+      hideLoadingOverlay();
+      document.getElementById('login-page').style.display = 'flex';
+      document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
+        '<p style="margin:0;font-size:14px;color:var(--text)">Please sign in with your @unisza.edu.my Google account to continue.</p></div>';
+    } else if (result && result.error === 'Not registered') {
+      hideLoadingOverlay();
+      document.getElementById('login-page').style.display = 'flex';
+      document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
+        '<p style="margin:0 0 12px;font-size:14px;color:var(--text)">Your account (' + escapeHtml(result.email || '') + ') is not registered.</p>' +
+        '<p style="margin:0;font-size:13px;color:var(--text2)">Please email <a href="mailto:pps@unisza.edu.my">pps@unisza.edu.my</a> to request access.</p></div>';
+    } else {
+      hideLoadingOverlay();
+      document.getElementById('login-page').style.display = 'flex';
+      document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
+        '<p style="margin:0;font-size:14px;color:var(--danger)">' + escapeHtml((result && result.error) || 'Authentication failed') + '</p></div>';
+    }
+  }).verifyUserAccess();
 }
 
 function logout() {

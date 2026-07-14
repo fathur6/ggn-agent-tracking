@@ -9,69 +9,31 @@ function doGet(e) {
       .setTitle('UniSZA Application')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  var code = e && e.parameter && e.parameter.code;
-  var state = e && e.parameter && e.parameter.state;
-  if (code && state) {
-    try {
-      var sessionToken = handleOAuthCode_(code, state);
-      var sessUser = resolveSessionToken_(sessionToken);
-      var template = HtmlService.createTemplateFromFile('Index');
-      template.sessionEmail = sessUser.email;
-      template.sessionUser = JSON.stringify(sessUser);
-      template.oauthError = '';
-      template.oauthUrl = getOAuthUrl_();
-      try { template.initialSummary = JSON.stringify(getDashboardSummary_('', sessUser.email)); } catch (ex) { template.initialSummary = ''; }
-      try { var pp = getProcessingPageData(sessUser.email); template.initialProcessing = JSON.stringify(pp.success ? { candidates: pp.candidates, groups: pp.groups, schedule: pp.schedule } : {}); } catch (ex) { template.initialProcessing = ''; }
-      return template
-        .evaluate()
-        .setTitle('UGS Agent Tracking')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    } catch (err) {
-      var template = HtmlService.createTemplateFromFile('Index');
-      template.sessionEmail = '';
-      template.sessionUser = '';
-      template.oauthError = err.message;
-      template.oauthUrl = getOAuthUrl_();
-      template.initialSummary = '';
-      template.initialProcessing = '';
-      return template
-        .evaluate()
-        .setTitle('UGS Agent Tracking')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    }
-  }
-  var sess = e && e.parameter && e.parameter.session;
-  if (sess) {
-    var sessUser = resolveSessionToken_(sess);
-    var template = HtmlService.createTemplateFromFile('Index');
-    template.sessionEmail = sessUser ? sessUser.email : '';
-    template.sessionUser = sessUser ? JSON.stringify(sessUser) : '';
-    template.oauthError = '';
-    template.oauthUrl = getOAuthUrl_();
-    try { template.initialSummary = sessUser ? JSON.stringify(getDashboardSummary_('', sessUser.email)) : ''; } catch (ex) { template.initialSummary = ''; }
-    try { if (sessUser) { var pp = getProcessingPageData(sessUser.email); template.initialProcessing = JSON.stringify(pp.success ? { candidates: pp.candidates, groups: pp.groups, schedule: pp.schedule } : {}); } else { template.initialProcessing = ''; } } catch (ex) { template.initialProcessing = ''; }
-    return template
-      .evaluate()
-      .setTitle('UGS Agent Tracking')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  }
-  var errMsg = e && e.parameter && e.parameter.error;
   try { ensureGroupsHeaders_(); } catch (ex) { /* ignore */ }
   var template = HtmlService.createTemplateFromFile('Index');
-  template.sessionEmail = '';
-  template.sessionUser = '';
-  template.oauthError = errMsg || '';
-  template.oauthUrl = getOAuthUrl_();
-  template.initialSummary = '';
-  template.initialProcessing = '';
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function verifyUserAccess() {
+  var email = Session.getActiveUser().getEmail();
+  if (!email) return { success: false, error: 'Not authenticated' };
+  var adminSheet = getSheetByName_(CONFIG.PROGRESS_SHEET_ID, 'Senarai Admin');
+  var data = adminSheet.getDataRange().getValues();
+  if (data.length === 0 || data[0][0] !== 'Email') {
+    adminSheet.getRange(1, 1, 1, 3).setValues([['Email', 'Name', 'Role']]);
+  }
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || '').toLowerCase() === email.toLowerCase()) {
+      var name = String(data[i][1] || email);
+      var role = String(data[i][2] || 'staff').toLowerCase();
+      return { success: true, email: email, name: name, role: role, agentId: email };
+    }
+  }
+  return { success: false, error: 'Not registered', email: email };
 }
 
 function getOAuthUrl_() {
