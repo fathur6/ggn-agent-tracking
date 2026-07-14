@@ -40,6 +40,11 @@ function verifyUserAccess() {
       return { success: true, email: email, name: name, role: role, agentId: email };
     }
   }
+  var agentUser = lookupUser_(email);
+  if (agentUser) {
+    agentUser.success = true;
+    return agentUser;
+  }
   return { success: false, error: 'Not registered', email: email };
 }
 
