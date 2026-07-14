@@ -14,8 +14,8 @@ function generateAndSendOffer_(input) {
     }
 
     var docName = 'Conditional Offer - ' + (input.fullName || 'Student');
-    var templateDoc = DriveApp.getFileById(CONFIG.OFFER_TEMPLATE_DOC_ID);
-    var copiedDoc = templateDoc.makeCopy(docName, DriveApp.getFolderById(CONFIG.OFFER_OUTPUT_FOLDER_ID));
+    var templateDoc = DriveApp.getFileById(CONFIG.OFFER_LETTER_DOC_TEMPLATE_ID);
+    var copiedDoc = templateDoc.makeCopy(docName, DriveApp.getFolderById(CONFIG.OFFER_LETTER_FOLDER_ID));
     var docId = copiedDoc.getId();
     var doc = DocumentApp.openById(docId);
     var body = doc.getBody();
@@ -32,7 +32,7 @@ function generateAndSendOffer_(input) {
 
     var pdfBlob = DriveApp.getFileById(docId).getAs('application/pdf');
     var pdfFilename = 'UNISZA Conditional Offer - ' + (input.fullName || 'Student') + '.pdf';
-    var pdfFile = DriveApp.getFolderById(CONFIG.OFFER_OUTPUT_FOLDER_ID).createFile(pdfBlob).setName(pdfFilename);
+    var pdfFile = DriveApp.getFolderById(CONFIG.OFFER_LETTER_FOLDER_ID).createFile(pdfBlob).setName(pdfFilename);
     var pdfUrl = pdfFile.getUrl();
 
     copiedDoc.setTrashed(true);
