@@ -25,6 +25,13 @@ function verifyUserAccess() {
   var data = adminSheet.getDataRange().getValues();
   if (data.length === 0 || data[0][0] !== 'Email') {
     adminSheet.getRange(1, 1, 1, 3).setValues([['Email', 'Name', 'Role']]);
+    var ownerEmail = Session.getEffectiveUser().getEmail();
+    if (ownerEmail) {
+      adminSheet.getRange(2, 1, 1, 3).setValues([[ownerEmail, ownerEmail, 'admin']]);
+      if (email.toLowerCase() === ownerEmail.toLowerCase()) {
+        return { success: true, email: email, name: email, role: 'admin', agentId: email };
+      }
+    }
   }
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0] || '').toLowerCase() === email.toLowerCase()) {
@@ -34,21 +41,6 @@ function verifyUserAccess() {
     }
   }
   return { success: false, error: 'Not registered', email: email };
-}
-
-function getOAuthUrl_() {
-  var clientId = CONFIG.GOOGLE_CLIENT_ID || '';
-  if (!clientId) return '';
-  var redirectUri = ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
-  var state = Utilities.getUuid();
-  CacheService.getScriptCache().put('oauth_state_' + state, 'pending', 600);
-  return 'https://accounts.google.com/o/oauth2/v2/auth?' +
-    'client_id=' + encodeURIComponent(clientId) +
-    '&redirect_uri=' + encodeURIComponent(redirectUri) +
-    '&response_type=code' +
-    '&scope=' + encodeURIComponent('openid email') +
-    '&state=' + encodeURIComponent(state) +
-    '&access_type=offline';
 }
 
 function include(filename) {
