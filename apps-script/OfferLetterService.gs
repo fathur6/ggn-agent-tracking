@@ -84,7 +84,6 @@ function generateAndSendOffer_(input) {
       name: 'UniSZA Graduate School',
       replyTo: CONFIG.EMAIL_REPLY_TO,
       cc: ccEmails.join(','),
-      replyTo: CONFIG.EMAIL_REPLY_TO,
     });
 
     return { applicationId: appId, pdfUrl: pdfUrl };
