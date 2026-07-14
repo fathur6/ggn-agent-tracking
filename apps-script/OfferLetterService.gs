@@ -82,7 +82,7 @@ function generateAndSendOffer_(input) {
     GmailApp.sendEmail(input.email, 'Conditional Offer - Universiti Sultan Zainal Abidin', emailBody, {
       attachments: [pdfBlob],
       name: 'UniSZA Graduate School',
-      from: CONFIG.EMAIL_FROM,
+      replyTo: CONFIG.EMAIL_REPLY_TO,
       cc: ccEmails.join(','),
       replyTo: CONFIG.EMAIL_REPLY_TO,
     });
