@@ -47,7 +47,9 @@ function verifyUserAccess() {
   }
   return { success: false, error: 'Not registered', email: email };
 }
-
+function getPublicAppUrl_() {
+  return ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
+}
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
