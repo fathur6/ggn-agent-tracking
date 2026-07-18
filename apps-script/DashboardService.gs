@@ -1,7 +1,18 @@
-function getDashboardSummary_(agentIdFilter, userEmail) {
+function getDashboardSummary_(agentIdFilter, userEmail, filters) {
   var user = getCurrentUser_(userEmail);
+  filters = filters || {};
 
   var leads = getSheetObjects_(CONFIG.LEADS_SHEET_ID, 'Leads');
+
+  var startDate = filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00') : null;
+  var endDate = filters.dateTo ? new Date(filters.dateTo + 'T23:59:59') : null;
+  if (startDate || endDate) {
+    leads = leads.filter(function (l) {
+      var timestamp = l.Timestamp ? new Date(l.Timestamp) : null;
+      if (!timestamp || isNaN(timestamp.getTime())) return false;
+      return (!startDate || timestamp >= startDate) && (!endDate || timestamp <= endDate);
+    });
+  }
 
   if (user.role === 'agent') {
     leads = leads.filter(function (l) {
@@ -12,27 +23,29 @@ function getDashboardSummary_(agentIdFilter, userEmail) {
     leads = leads.filter(function (l) { return getLeadAgent_(l) === agentIdFilter; });
   }
 
+  var agents = getAgentDirectory_();
   var totalLeads = leads.length;
-  var offersSent = leads.filter(function (l) { return l.Status === 'COL Sent'; }).length;
-  var accepted = leads.filter(function (l) { return l.Status === 'Agreed'; }).length;
-  var enrolled = leads.filter(function (l) { return l.Status === 'Enrolled'; }).length;
+  var offersSent = leads.filter(function (l) { return normalizeLeadStatus_(l.Status) === 'COL Sent'; }).length;
+  var accepted = leads.filter(function (l) { return normalizeLeadStatus_(l.Status) === 'Agreed'; }).length;
+  var enrolled = leads.filter(function (l) { return normalizeLeadStatus_(l.Status) === 'Enrolled'; }).length;
   var conversionRate = offersSent > 0 ? Math.round((accepted / offersSent) * 100) : 0;
 
   var byAgent = {};
   leads.forEach(function (l) {
     var key = getLeadAgent_(l) || 'Unknown';
     if (!byAgent[key]) {
-      byAgent[key] = { agentName: key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
+      byAgent[key] = { agentId: key, agentName: agents[key] || key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
     }
     byAgent[key].leadCount++;
-    if (l.Status === 'Offer Sent') byAgent[key].offersSent++;
-    if (l.Status === 'Accepted') byAgent[key].accepted++;
-    if (l.Status === 'Enrolled') byAgent[key].enrolled++;
+    var status = normalizeLeadStatus_(l.Status);
+    if (status === 'COL Sent') byAgent[key].offersSent++;
+    if (status === 'Agreed') byAgent[key].accepted++;
+    if (status === 'Enrolled') byAgent[key].enrolled++;
   });
 
   var byStatus = {};
   leads.forEach(function (l) {
-    var st = l.Status || 'New';
+    var st = normalizeLeadStatus_(l.Status);
     byStatus[st] = (byStatus[st] || 0) + 1;
   });
 
@@ -44,12 +57,24 @@ function getDashboardSummary_(agentIdFilter, userEmail) {
       return {
         applicationId: l.Reference,
         fullName: l.Name,
-        status: l.Status,
+         status: normalizeLeadStatus_(l.Status),
         timestamp: l.Timestamp,
       };
     });
 
   var processingStats = getProcessingStats_(user);
+  var trend = {};
+  leads.forEach(function (l) {
+    if (!l.Timestamp) return;
+    var day = l.Timestamp instanceof Date ? Utilities.formatDate(l.Timestamp, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(l.Timestamp).slice(0, 10);
+    if (!trend[day]) trend[day] = { date: day, leads: 0, colSent: 0, agreed: 0, enrolled: 0 };
+    trend[day].leads++;
+    var status = normalizeLeadStatus_(l.Status);
+    if (status === 'COL Sent') trend[day].colSent++;
+    if (status === 'Agreed') trend[day].agreed++;
+    if (status === 'Enrolled') trend[day].enrolled++;
+  });
+
   return {
     totalLeads: totalLeads,
     offersSent: offersSent,
@@ -61,8 +86,38 @@ function getDashboardSummary_(agentIdFilter, userEmail) {
     underProcessing: processingStats.underProcessing,
     byAgent: Object.values(byAgent),
     byStatus: byStatus,
+    funnel: { leads: totalLeads, colSent: offersSent, agreed: accepted, enrolled: enrolled },
+    trend: Object.keys(trend).sort().map(function (key) { return trend[key]; }),
     recentActivity: recentActivity,
   };
+}
+
+function normalizeLeadStatus_(status) {
+  var value = String(status || '').trim().toLowerCase();
+  if (value === 'offer sent' || value === 'col sent') return 'COL Sent';
+  if (value === 'accepted' || value === 'agreed') return 'Agreed';
+  if (value === 'enrolled') return 'Enrolled';
+  if (value === 'deleted') return 'Deleted';
+  return status || 'New';
+}
+
+function getAgentDirectory_() {
+  var directory = {};
+  try {
+    var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
+    var headerRow = 0;
+    for (var i = 0; i < data.length; i++) {
+      if (data[i].indexOf('AgentID') !== -1) { headerRow = i; break; }
+    }
+    var headers = data[headerRow] || [];
+    var idCol = headers.indexOf('AgentID');
+    var nameCol = headers.indexOf('Name');
+    if (idCol === -1 || nameCol === -1) return directory;
+    for (var r = headerRow + 1; r < data.length; r++) {
+      if (data[r][idCol]) directory[data[r][idCol]] = data[r][nameCol] || data[r][idCol];
+    }
+  } catch (e) { /* dashboard remains usable without directory data */ }
+  return directory;
 }
 
 function getProcessingStats_(user) {

@@ -556,7 +556,7 @@ function createForm(formData, userEmail) {
     var eventDate = formData.eventDate || '';
     var remark = formData.remark || '';
     var formName = user.name + (locationEvent ? ' - ' + locationEvent : '') + (eventDate ? ' (' + eventDate + ')' : '');
-    var publicUrl = getAppBaseUrl_() + '?page=public&formId=' + formId + '&agentId=' + encodeURIComponent(user.agentId);
+    var publicUrl = getPublicAppUrl_() + '?page=public&formId=' + formId + '&agentId=' + encodeURIComponent(user.agentId);
 
     var row = [
       formId,
@@ -1251,9 +1251,9 @@ function cronCheckEmgsStatus_() {
   return { checked: checked, updated: updated, skipped: skipped };
 }
 
-function getDashboard(agentIdFilter, userEmail) {
+function getDashboard(agentIdFilter, userEmail, filters) {
   try {
-    var summary = getDashboardSummary_(agentIdFilter, userEmail);
+    var summary = getDashboardSummary_(agentIdFilter, userEmail, filters);
     return { success: true, summary: summary };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1371,7 +1371,7 @@ function syncFormUrls(userEmail) {
     var publicUrlCol = headers.indexOf('PublicURL');
     if (formIdCol === -1 || publicUrlCol === -1) throw new Error('Required columns not found');
 
-    var baseUrl = getAppBaseUrl_();
+    var baseUrl = getPublicAppUrl_();
     var updated = 0;
     for (var i = 1; i < data.length; i++) {
       var formId = data[i][formIdCol];
@@ -1403,6 +1403,5 @@ function getLocationCol_(headers) {
 function getLeadAgent_(lead) {
   return lead['AgentID'] || lead['Agent'] || '';
 }
-
 
 

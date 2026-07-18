@@ -163,7 +163,17 @@ function renderUserInfo() {
 }
 
 function renderDashboardContent(el, s) {
-  var html = '<div class="stat-grid stat-grid-5">' +
+  var agentOptions = '<option value="">All agents</option>';
+  (s.byAgent || []).forEach(function (agent) {
+    agentOptions += '<option value="' + escapeHtml(agent.agentId || '') + '">' + escapeHtml(agent.agentName || agent.agentId || 'Unknown') + '</option>';
+  });
+  var html = '<div class="dashboard-filters card">' +
+    '<div><label class="label">From</label><input class="input" type="date" id="dashboard-date-from"></div>' +
+    '<div><label class="label">To</label><input class="input" type="date" id="dashboard-date-to"></div>' +
+    '<div><label class="label">Agent</label><select class="select" id="dashboard-agent-filter">' + agentOptions + '</select></div>' +
+    '<button class="btn btn-primary btn-sm" onclick="applyDashboardFilters()">Apply filters</button>' +
+    '</div>' +
+    '<div class="stat-grid stat-grid-5">' +
     '<div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">' + s.totalLeads + '</div></div>' +
     '<div class="stat-card"><div class="stat-label">COL Sent</div><div class="stat-value">' + s.offersSent + '</div></div>' +
     '<div class="stat-card"><div class="stat-label">Agreed</div><div class="stat-value">' + s.accepted + '</div></div>' +
@@ -177,11 +187,15 @@ function renderDashboardContent(el, s) {
   '</div>';
 
   var byAgentRows = s.byAgent || [];
-  html += '<div class="card"><div class="card-title">Activity by Agent</div>';
+  var funnel = s.funnel || { leads: 0, colSent: 0, agreed: 0, enrolled: 0 };
+  html += '<div class="dashboard-funnel card"><div class="card-title">Lead funnel</div>' +
+    '<div class="funnel-steps"><div><strong>' + funnel.leads + '</strong><span>Leads</span></div><div><strong>' + funnel.colSent + '</strong><span>COL Sent</span></div><div><strong>' + funnel.agreed + '</strong><span>Agreed</span></div><div><strong>' + funnel.enrolled + '</strong><span>Enrolled</span></div></div></div>';
+
+  html += '<div class="card"><div class="card-title">Agent performance</div>';
   if (byAgentRows.length === 0) {
     html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)"></div><div class="empty-label">No agent activity yet</div></div>';
   } else {
-    html += '<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Leads</th><th>COL Sent</th><th>Agreed</th><th>Enrolled</th><th>Conv</th></tr></thead><tbody>';
+     html += '<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Leads</th><th>COL Sent</th><th>Agreed</th><th>Enrolled</th><th>Conv</th></tr></thead><tbody>';
     byAgentRows.forEach(function (a) {
       var conv = a.offersSent > 0 ? Math.round((a.accepted / a.offersSent) * 100) : 0;
       html += '<tr><td>' + escapeHtml(a.agentName) + '</td><td>' + a.leadCount + '</td><td>' + a.offersSent + '</td><td>' + a.accepted + '</td><td>' + a.enrolled + '</td><td>' + conv + '%</td></tr>';
@@ -224,6 +238,18 @@ function loadDashboard(summary) {
     if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
     renderDashboardContent(el, result.summary);
   }).getDashboard('', _authEmail());
+}
+
+function applyDashboardFilters() {
+  var el = document.getElementById('dashboard-content');
+  var from = document.getElementById('dashboard-date-from').value;
+  var to = document.getElementById('dashboard-date-to').value;
+  var agent = document.getElementById('dashboard-agent-filter').value;
+  el.innerHTML = '<div class="loading">Loading dashboard...</div>';
+  google.script.run.withSuccessHandler(function (result) {
+    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
+    renderDashboardContent(el, result.summary);
+  }).getDashboard(agent, _authEmail(), { dateFrom: from, dateTo: to });
 }
 
 function loadLeads(filters) {
