@@ -115,7 +115,21 @@ function _authEmail() { return CURRENT_USER ? CURRENT_USER.email || '' : ''; }
 function initApp() {
   showLoadingOverlay();
   document.querySelector('.loading-text').textContent = 'Authenticating...';
+  var serverAuth = document.getElementById('server-auth');
+  if (serverAuth && serverAuth.textContent) {
+    try {
+      handleAuthResult_(JSON.parse(serverAuth.textContent));
+      return;
+    } catch (e) { /* fall through to the client call */ }
+  }
   google.script.run.withSuccessHandler(function(result) {
+    handleAuthResult_(result);
+  }).withFailureHandler(function(error) {
+    handleAuthResult_({ success: false, error: error && error.message || 'Authentication failed' });
+  }).verifyUserAccess();
+}
+
+function handleAuthResult_(result) {
     if (result && result.success) {
       CURRENT_USER = result;
       if (result.role === 'admin') CURRENT_USER.role = 'admin';
@@ -145,7 +159,6 @@ function initApp() {
       document.getElementById('login-error').innerHTML = '<div class="login-form-box" id="login-form-box">' +
         '<p style="margin:0;font-size:14px;color:var(--danger)">' + escapeHtml((result && result.error) || 'Authentication failed') + '</p></div>';
     }
-  }).verifyUserAccess();
 }
 
 function logout() {

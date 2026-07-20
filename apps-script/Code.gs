@@ -11,6 +11,13 @@ function doGet(e) {
   }
   try { ensureGroupsHeaders_(); } catch (ex) { /* ignore */ }
   var template = HtmlService.createTemplateFromFile('Index');
+  var initialAuth;
+  try {
+    initialAuth = verifyUserAccess();
+  } catch (ex) {
+    initialAuth = { success: false, error: ex.message };
+  }
+  template.initialAuth = JSON.stringify(initialAuth || {});
   return template
     .evaluate()
     .setTitle('UGS Agent Tracking')
@@ -1426,4 +1433,3 @@ function getLocationCol_(headers) {
 function getLeadAgent_(lead) {
   return lead['AgentID'] || lead['Agent'] || '';
 }
-
