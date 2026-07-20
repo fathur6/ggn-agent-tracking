@@ -179,15 +179,19 @@ function renderUserInfo() {
 }
 
 function renderDashboardContent(el, s) {
+  var dashboardFilters = s.filters || {};
   var agentOptions = '<option value="">All agents</option>';
   (s.byAgent || []).forEach(function (agent) {
-    agentOptions += '<option value="' + escapeHtml(agent.agentId || '') + '">' + escapeHtml(agent.agentName || agent.agentId || 'Unknown') + '</option>';
+    var selected = dashboardFilters.agentId === (agent.agentId || '') ? ' selected' : '';
+    agentOptions += '<option value="' + escapeHtml(agent.agentId || '') + '"' + selected + '>' + escapeHtml(agent.agentName || agent.agentId || 'Unknown') + '</option>';
   });
-  var html = '<div class="dashboard-filters card">' +
-    '<div><label class="label">From</label><input class="input" type="date" id="dashboard-date-from"></div>' +
-    '<div><label class="label">To</label><input class="input" type="date" id="dashboard-date-to"></div>' +
+  var html = '<div class="dashboard-filters card"><div class="dashboard-filter-heading">Analyse performance</div>' +
+    '<div class="dashboard-presets"><button class="btn btn-outline btn-sm" onclick="setDashboardPreset(0)">Today</button><button class="btn btn-outline btn-sm" onclick="setDashboardPreset(7)">7 days</button><button class="btn btn-outline btn-sm" onclick="setDashboardPreset(30)">30 days</button><button class="btn btn-outline btn-sm" onclick="setDashboardPreset(90)">This quarter</button></div>' +
+    '<div><label class="label">From</label><input class="input" type="date" id="dashboard-date-from" value="' + escapeHtml(dashboardFilters.dateFrom || '') + '"></div>' +
+    '<div><label class="label">To</label><input class="input" type="date" id="dashboard-date-to" value="' + escapeHtml(dashboardFilters.dateTo || '') + '"></div>' +
     '<div><label class="label">Agent</label><select class="select" id="dashboard-agent-filter">' + agentOptions + '</select></div>' +
-    '<button class="btn btn-primary btn-sm" onclick="applyDashboardFilters()">Apply filters</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="applyDashboardFilters()">Apply filters</button><button class="btn btn-outline btn-sm" onclick="clearDashboardFilters()">Clear</button>' +
+    '<div class="dashboard-filter-summary">Showing ' + dashboardFilterSummary_(dashboardFilters) + '</div>' +
     '</div>' +
     '<div class="stat-grid stat-grid-5">' +
     '<div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">' + s.totalLeads + '</div></div>' +
@@ -207,16 +211,22 @@ function renderDashboardContent(el, s) {
   html += '<div class="dashboard-funnel card"><div class="card-title">Lead funnel</div>' +
     '<div class="funnel-steps"><div><strong>' + funnel.leads + '</strong><span>Leads</span></div><div><strong>' + funnel.colSent + '</strong><span>COL Sent</span></div><div><strong>' + funnel.agreed + '</strong><span>Agreed</span></div><div><strong>' + funnel.enrolled + '</strong><span>Enrolled</span></div></div></div>';
 
-  html += '<div class="card"><div class="card-title">Agent performance</div>';
-  if (byAgentRows.length === 0) {
+  var activeRows = byAgentRows.filter(function (a) { return a.leadCount > 0; }).sort(function (a, b) { return b.leadCount - a.leadCount; });
+  var inactiveRows = byAgentRows.filter(function (a) { return a.leadCount === 0; });
+  var maxLeads = activeRows.length ? activeRows[0].leadCount : 1;
+  html += '<div class="card"><div class="card-title-row"><div class="card-title">Agent performance</div><button class="btn btn-outline btn-sm" onclick="toggleInactiveAgents()">' + (dashboardShowInactive ? 'Hide inactive agents' : 'Show inactive agents') + '</button></div>';
+  if (activeRows.length === 0) {
     html += '<div class="empty-state"><div class="empty-state-icon" style="border-color:rgba(147,51,234,0.3);color:rgba(147,51,234,0.6)"></div><div class="empty-label">No agent activity yet</div></div>';
   } else {
-     html += '<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Leads</th><th>COL Sent</th><th>Agreed</th><th>Enrolled</th><th>Conv</th></tr></thead><tbody>';
-    byAgentRows.forEach(function (a) {
+    html += '<div class="agent-ranking">';
+    activeRows.forEach(function (a) {
       var conv = a.offersSent > 0 ? Math.round((a.accepted / a.offersSent) * 100) : 0;
-      html += '<tr><td>' + escapeHtml(a.agentName) + '</td><td>' + a.leadCount + '</td><td>' + a.offersSent + '</td><td>' + a.accepted + '</td><td>' + a.enrolled + '</td><td>' + conv + '%</td></tr>';
+      var share = Math.round((a.leadCount / Math.max(1, s.totalLeads)) * 100);
+      var width = Math.max(3, Math.round((a.leadCount / maxLeads) * 100));
+      html += '<div class="agent-ranking-row"><div class="agent-ranking-top"><strong>' + escapeHtml(a.agentName) + '</strong><span>' + a.leadCount + ' leads · ' + share + '% share</span></div><div class="agent-ranking-track"><div class="agent-ranking-fill" style="width:' + width + '%"></div></div><div class="agent-ranking-meta"><span>COL Sent <b>' + a.offersSent + '</b></span><span>Agreed <b>' + a.accepted + '</b></span><span>Enrolled <b>' + a.enrolled + '</b></span><span>Conversion <b>' + conv + '%</b></span></div></div>';
     });
-    html += '</tbody></table></div>';
+    if (dashboardShowInactive) inactiveRows.forEach(function (a) { html += '<div class="agent-inactive-row"><span>' + escapeHtml(a.agentName) + '</span><span>No leads</span></div>'; });
+    html += '</div>';
   }
   html += '</div>';
 
@@ -266,6 +276,45 @@ function applyDashboardFilters() {
     if (!result || !result.success) { el.innerHTML = '<div class="empty">Error loading dashboard</div>'; return; }
     renderDashboardContent(el, result.summary);
   }).getDashboard(agent, _authEmail(), { dateFrom: from, dateTo: to });
+}
+
+var dashboardShowInactive = false;
+function toggleInactiveAgents() {
+  dashboardShowInactive = !dashboardShowInactive;
+  var el = document.getElementById('dashboard-content');
+  var from = document.getElementById('dashboard-date-from').value;
+  var to = document.getElementById('dashboard-date-to').value;
+  var agent = document.getElementById('dashboard-agent-filter').value;
+  el.dataset.dashboardFilters = JSON.stringify({ dateFrom: from, dateTo: to, agentId: agent });
+  applyDashboardFilters();
+}
+
+function setDashboardPreset(days) {
+  var now = new Date();
+  var from = new Date(now);
+  if (days === 0) from = new Date(now);
+  else from.setDate(now.getDate() - days + 1);
+  document.getElementById('dashboard-date-from').value = dashboardDate_(from);
+  document.getElementById('dashboard-date-to').value = dashboardDate_(now);
+  applyDashboardFilters();
+}
+
+function clearDashboardFilters() {
+  document.getElementById('dashboard-date-from').value = '';
+  document.getElementById('dashboard-date-to').value = '';
+  document.getElementById('dashboard-agent-filter').value = '';
+  applyDashboardFilters();
+}
+
+function dashboardDate_(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
+function dashboardFilterSummary_(filters) {
+  var from = filters.dateFrom || 'all dates';
+  var to = filters.dateTo || '';
+  var agent = filters.agentId || 'all agents';
+  return escapeHtml(from + (to ? ' to ' + to : '') + ' · ' + agent);
 }
 
 function loadLeads(filters) {

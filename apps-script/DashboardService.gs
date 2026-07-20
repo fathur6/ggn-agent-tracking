@@ -34,13 +34,18 @@ function getDashboardSummary_(agentIdFilter, userEmail, filters) {
   leads.forEach(function (l) {
     var key = getLeadAgent_(l) || 'Unknown';
     if (!byAgent[key]) {
-      byAgent[key] = { agentId: key, agentName: agents[key] || key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
+      byAgent[key] = { agentId: key, agentName: agents.byId[key] || key, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
     }
     byAgent[key].leadCount++;
     var status = normalizeLeadStatus_(l.Status);
     if (status === 'COL Sent') byAgent[key].offersSent++;
     if (status === 'Agreed') byAgent[key].accepted++;
     if (status === 'Enrolled') byAgent[key].enrolled++;
+  });
+  agents.active.forEach(function (agent) {
+    if (!byAgent[agent.id]) {
+      byAgent[agent.id] = { agentId: agent.id, agentName: agent.name, leadCount: 0, offersSent: 0, accepted: 0, enrolled: 0 };
+    }
   });
 
   var byStatus = {};
@@ -88,6 +93,7 @@ function getDashboardSummary_(agentIdFilter, userEmail, filters) {
     byStatus: byStatus,
     funnel: { leads: totalLeads, colSent: offersSent, agreed: accepted, enrolled: enrolled },
     trend: Object.keys(trend).sort().map(function (key) { return trend[key]; }),
+    filters: { dateFrom: filters.dateFrom || '', dateTo: filters.dateTo || '', agentId: agentIdFilter || '' },
     recentActivity: recentActivity,
   };
 }
@@ -102,7 +108,7 @@ function normalizeLeadStatus_(status) {
 }
 
 function getAgentDirectory_() {
-  var directory = {};
+  var directory = { byId: {}, active: [] };
   try {
     var data = getSheetData_(CONFIG.AGENTS_SHEET_ID, 'Agents');
     var headerRow = 0;
@@ -112,9 +118,17 @@ function getAgentDirectory_() {
     var headers = data[headerRow] || [];
     var idCol = headers.indexOf('AgentID');
     var nameCol = headers.indexOf('Name');
+    var statusCol = headers.indexOf('Status');
     if (idCol === -1 || nameCol === -1) return directory;
     for (var r = headerRow + 1; r < data.length; r++) {
-      if (data[r][idCol]) directory[data[r][idCol]] = data[r][nameCol] || data[r][idCol];
+      if (data[r][idCol]) {
+        var id = data[r][idCol];
+        var name = data[r][nameCol] || id;
+        directory.byId[id] = name;
+        if (statusCol === -1 || String(data[r][statusCol] || 'active').toLowerCase() !== 'inactive') {
+          directory.active.push({ id: id, name: name });
+        }
+      }
     }
   } catch (e) { /* dashboard remains usable without directory data */ }
   return directory;
