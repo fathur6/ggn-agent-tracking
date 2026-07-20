@@ -120,11 +120,14 @@ function initApp() {
       CURRENT_USER = result;
       if (result.role === 'admin') CURRENT_USER.role = 'admin';
       if (result.name) CURRENT_USER.name = result.name;
+      _processingCache = result.processing || null;
+      _processingGroupsCache = result.processing ? (result.processing.groups || []) : [];
       document.querySelector('.loading-text').textContent = 'Loading...';
       document.getElementById('app-shell').style.display = 'flex';
       hideLoadingOverlay();
       renderUserInfo();
-      navigate('dashboard');
+      if (result.summary) loadDashboard(result.summary);
+      else navigate('dashboard');
     } else if (result && result.error === 'Not authenticated') {
       hideLoadingOverlay();
       document.getElementById('login-page').style.display = 'flex';
@@ -437,7 +440,11 @@ function loadProcessing() {
   el.innerHTML = '<div class="loading">Loading...</div>';
   if (_emgsCountdownInterval) { clearInterval(_emgsCountdownInterval); _emgsCountdownInterval = null; }
   google.script.run.withSuccessHandler(function (result) {
-    if (!result || !result.success) { el.innerHTML = '<div class="empty">Error: ' + escapeHtml((result && result.error) || 'unknown') + '</div>'; return; }
+    if (!result || !result.success) {
+      var processingError = result && (result.error || result.processingError);
+      el.innerHTML = '<div class="empty">Error: ' + escapeHtml(processingError || 'Processing data unavailable') + '</div>';
+      return;
+    }
     _processingGroupsCache = result.groups || [];
     renderProcessing(result.candidates, result.groups || []);
     var countEl = document.getElementById('emgs-countdown');

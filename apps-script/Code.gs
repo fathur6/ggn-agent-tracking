@@ -29,7 +29,7 @@ function verifyUserAccess() {
     if (ownerEmail) {
       adminSheet.getRange(2, 1, 1, 3).setValues([[ownerEmail, ownerEmail, 'admin']]);
       if (email.toLowerCase() === ownerEmail.toLowerCase()) {
-        return { success: true, email: email, name: email, role: 'admin', agentId: email };
+        return buildUserAccessResponse_({ email: email, name: email, role: 'admin', agentId: email });
       }
     }
   }
@@ -37,15 +37,38 @@ function verifyUserAccess() {
     if (String(data[i][0] || '').toLowerCase() === email.toLowerCase()) {
       var name = String(data[i][1] || email);
       var role = String(data[i][2] || 'staff').toLowerCase();
-      return { success: true, email: email, name: name, role: role, agentId: email };
+      return buildUserAccessResponse_({ email: email, name: name, role: role, agentId: email });
     }
   }
   var agentUser = lookupUser_(email);
   if (agentUser) {
     agentUser.success = true;
-    return agentUser;
+    return buildUserAccessResponse_(agentUser);
   }
   return { success: false, error: 'Not registered', email: email };
+}
+
+function buildUserAccessResponse_(user) {
+  var response = { success: true, email: user.email, name: user.name, role: user.role, agentId: user.agentId };
+  try {
+    response.summary = getDashboardSummary_('', user.email);
+  } catch (e) {
+    response.summary = null;
+    response.summaryError = e.message;
+  }
+  try {
+    var processing = getProcessingPageData(user.email);
+    response.processing = processing.success ? {
+      candidates: processing.candidates,
+      groups: processing.groups,
+      schedule: processing.schedule,
+    } : null;
+    if (!processing.success) response.processingError = processing.error;
+  } catch (e) {
+    response.processing = null;
+    response.processingError = e.message;
+  }
+  return response;
 }
 function getPublicAppUrl_() {
   return ScriptApp.getService().getUrl().replace(/\/a\/[^\/]+\/macros\//, '/macros/');
@@ -1403,5 +1426,4 @@ function getLocationCol_(headers) {
 function getLeadAgent_(lead) {
   return lead['AgentID'] || lead['Agent'] || '';
 }
-
 
